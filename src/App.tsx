@@ -104,6 +104,14 @@ function Auth({onSuccess}:{onSuccess:()=>void}){
  const [mode,setMode]=useState<AuthMode>(reset?'reset':window.location.pathname==='/register'?'register':window.location.pathname==='/forgot-password'?'forgot':'login');
  const [email,setEmail]=useState(''),[password,setPassword]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
+ useEffect(()=>{
+  const sync=()=>{
+   const next=window.location.pathname;
+   setMode(next==='/register'?'register':next==='/forgot-password'?'forgot':next==='/check-email'?'pending':reset?'reset':'login');
+  };
+  window.addEventListener('popstate',sync);
+  return()=>window.removeEventListener('popstate',sync);
+ },[reset]);
  const selectMode=(next:AuthMode)=>{
   setMode(next);setError('');setMessage('');
   const path=next==='register'?'/register':next==='forgot'?'/forgot-password':next==='reset'?'/reset-password':next==='pending'?'/check-email':'/sign-in';
@@ -111,11 +119,11 @@ function Auth({onSuccess}:{onSuccess:()=>void}){
  };
  async function submit(e:FormEvent){e.preventDefault();setError('');setMessage('');setBusy(true);
   try{
-   if(mode==='register'){const r=await post('/auth/register',{email,password});setMessage(r.message);selectMode('pending');setMessage(r.message);setPassword('')}
+   if(mode==='register'){const r=await post('/auth/register',{email,password});selectMode('pending');setMessage(r.message);setPassword('')}
    else if(mode==='login'){await post('/auth/login',{email,password});onSuccess()}
    else if(mode==='pending'){const r=await post('/auth/resend-verification',{email});setMessage(r.message)}
    else if(mode==='forgot'){const r=await post('/auth/forgot-password',{email});setMessage(r.message)}
-   else{await post('/auth/reset-password',{token:reset,password});window.history.replaceState({},'',window.location.pathname);setMessage('Password updated. Sign in now.');selectMode('login');setMessage('Password updated. Sign in now.');setPassword('')}
+   else{await post('/auth/reset-password',{token:reset,password});window.history.replaceState({},'',window.location.pathname);selectMode('login');setMessage('Password updated. Sign in now.');setPassword('')}
   }catch(e){setError((e as Error).message)}finally{setBusy(false)}
  }
  return <div className="auth-layout"><div className="auth-art"><Brand/><div><span className="overline">THE WORKFORCE PLATFORM</span><h1>Run your team.<br/>Own your time.</h1><p>Scheduling, time tracking and team management. One secure home for your organisation.</p><div className="auth-points"><span>01 / Plan smarter</span><span>02 / Stay organised</span><span>03 / Grow together</span></div></div><small>SHIFTLEDGER — BUILT FOR REAL TEAMS</small></div>
