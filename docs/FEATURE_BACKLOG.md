@@ -67,14 +67,9 @@ Deliver a commercially viable, web-first, international multi-tenant workforce m
 
 **Non-negotiable data policy:** Cloudflare D1 is canonical; no localStorage-as-database, simulated business data or invented production statistics. Never delete or overwrite existing customers, organisations, sessions or deployment secrets as part of routine development.
 
-## Current status — observed versus not verified
-Observed through screenshots and reports: registration, email verification with Resend development sender, login, new three-step organisation onboarding and an owner dashboard have worked at least once; the owner created a test organisation, and the app was restored after URL/middleware/session defects. Code in the repository implements early location/staff/shift API endpoints, initial role checks, deep-link routing and preview pages. These observations **do not prove** complete business readiness.
+## Current status
 
-Unverified or incomplete: production migration state across environments; automated clean-install build; isolated test database; comprehensive tenant/branch authorisation; manager invitation UI; branch-specific timezone form; robust shift CRUD/publishing; reports; full timesheets, leave, swaps, payroll exports; true billing; API documentation; CI/deploy gates. Some screens remain placeholders. Do not claim any item as completed without a passing test or reproducible verification.
-
-## Verified implementation update
-
-See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope and [DEPLOYMENT.md](DEPLOYMENT.md) for deployment gates. Local Workers and D1 tests cover session persistence, tenant and branch isolation, migration smoke, browser history and mobile branch detail. Location lifecycle, branch manager grants, atomic staff assignment, private invitation links, membership suspension, personal profile editing and the weekly rota with draft editing, publishing and cancellation are implemented. Published shifts are visible to their assigned employees. Hosted staging, production D1 history, live owner sign-in, and provider delivery are still separate gates.
+The local Worker and D1 regression suites verify the business-side foundations and the implemented P1–P3 workflows. The production smoke confirms the exact deployed Worker version, public liveness, D1 readiness, signed-out API boundaries and bookmarked calendar HTML. The latest feature migrations still require production approval. Authenticated production smoke, sender delivery, production recovery access and the remaining phase exit gates are open. See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Priority P0 — Stabilise the product and deployments FIRST (blocking all features)
 - [ ] Inspect repo, dependencies, scripts, Worker/D1 bindings and current deployments; document exact current state and blockers. Preserve existing production D1, account and `David's Shop` test organisation.

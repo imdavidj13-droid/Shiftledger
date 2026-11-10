@@ -30,6 +30,7 @@ Updated 10 November 2026. The master roadmap remains [FEATURE_BACKLOG.md](FEATUR
 - [Shift templates (6c108fc)](https://github.com/imdavidj13-droid/Shiftledger/commit/6c108fc9767dfb26fbcfbbb3d0a7631c52ec340e) passed [GitHub Actions](https://github.com/imdavidj13-droid/Shiftledger/actions/runs/42789202234) and the five live smoke checks. Cloudflare Worker version was `a8fe82d8-9570-409c-a574-0a2478ca78e0`. The readiness response confirmed migrations 0006–0011 were still pending.
 - Schedulers can create, edit and archive branch-local shift templates and apply them to real draft shifts. Templates preserve wall-clock time, unpaid breaks and overnight end dates. The manager workflow and branch boundaries passed 43 full-schema tests, one legacy-schema test and a production dry-run. Migration `0011_shift_templates.sql` awaits production approval.
 - The Schedule coverage filter shows published vacancies and upcoming shifts overlapping approved leave. Managers can revise an assigned published shift before it starts or has a linked time entry. Revisions check both branch permissions and staff eligibility and record previous and new values in audit history. Staff APIs do not expose the leave warning.
+- [Coverage and published revisions (b63c41a)](https://github.com/imdavidj13-droid/Shiftledger/commit/b63c41a96210dd028b4a9587eab8f554693234cf) passed five public live checks. The Worker returned the exact commit and version `26ec875a-e2de-4b82-9c9f-25504d52634b`. [GitHub Actions](https://github.com/imdavidj13-droid/Shiftledger/actions/runs/42789664957) passed.
 - Coverage and revised shifts passed `npm run verify` (45 full-schema tests and one legacy-schema test) and the Wrangler production dry-run. This change adds no migration.
 - Leave balances, availability/position eligibility, notification delivery, editable recurring series, multi-shift templates and remaining P0–P3 release gates are still open. Hosted staging is outside the current deployment policy.
 
@@ -51,11 +52,24 @@ Updated 10 November 2026. The master roadmap remains [FEATURE_BACKLOG.md](FEATUR
 | --- | --- |
 | `npm ci` | Reproducible install from the committed lockfile |
 | `npm run typecheck` and `npm run build` | Passed |
-| `npm test` | 25 passed, including Chromium end-to-end tests, local Worker and D1 integration, DST unit checks and an additive upgrade test |
-| `npx wrangler deploy --dry-run` | Passed against production configuration without upload |
-| Live read-only smoke | `/api/health` 200 JSON, signed-out `/api/v1/auth/me` and organisation collection 401 JSON, workspace deep link 200 HTML |
+| `npm run verify` | 45 full-schema tests and one legacy-schema test passed, including Chromium browser flows, local Workers and D1 integration, concurrency, branch and tenant isolation, DST and additive upgrades |
+| `node scripts/deploy.mjs --dry-run` | Passed against production configuration without upload |
+| `npm run smoke` | Exact Cloudflare Worker commit and version, healthy core D1 schema, signed-out API checks and HTML for a bookmarked schedule route |
 
 Browser and API fixtures contain synthetic data. Local tests in the Work environment used headless Chromium and a loopback-only workaround for the environment’s interface enumeration restriction. The GitHub runner uses standard Playwright Chromium.
+
+## Production migrations awaiting approval
+
+| Migration | Enables |
+| --- | --- |
+| `0006_open_shifts.sql` | Explicit vacancies and claim review |
+| `0007_leave_requests.sql` | Leave requests, approvals and rota conflict checks |
+| `0008_timekeeping.sql` | Clock punches, breaks and timesheet management |
+| `0009_shift_swaps.sql` | Consented swaps and manager approval |
+| `0010_staff_profiles.sql` | Department, position and primary branch details |
+| `0011_shift_templates.sql` | Reusable branch shift templates |
+
+All six passed on disposable D1. Live readiness reported their feature schemas absent. Production migration history and the recovery bookmark require account access. Follow the [deployment runbook](DEPLOYMENT.md) for the approval and activation steps.
 
 ## Remaining release gates
 
