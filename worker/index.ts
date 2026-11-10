@@ -231,6 +231,9 @@ app.post('/api/v1/organisations',async c=>{
   const firstLocation=safeStr(x?.firstLocation,100);
   if(![0,1,6].includes(weekStart)||!['12h','24h'].includes(timeFormat))return fail(c,'Invalid scheduling preferences',422);
   if(x?.firstLocation!==undefined&&firstLocation.length<2)return fail(c,'First location must have at least two characters',422);
+  if(x?.locations!==undefined&&!Array.isArray(x.locations))return fail(c,'Locations must be a list',422);
+  const names:string[]=Array.isArray(x?.locations)?x.locations.map((name:unknown)=>safeStr(name,100)):(firstLocation?[firstLocation]:[]);
+  if(names.length>20||names.some(name=>name.length<2)||new Set(names.map(name=>name.toLocaleLowerCase())).size!==names.length)return fail(c,'Provide up to 20 distinct location names, each at least two characters.',422);
   if(name.length<2||!/^[A-Z]{2}$/.test(country)||!/^[A-Z]{3}$/.test(currency)||!validZone(zone))return fail(c,'Provide an organisation name, ISO country/currency codes and a valid IANA time zone.',422);
   const id=crypto.randomUUID(),slug=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,42)+'-'+id.slice(0,8);
   const writes=[
@@ -238,7 +241,7 @@ app.post('/api/v1/organisations',async c=>{
     c.env.DB.prepare("INSERT INTO memberships(organisation_id,user_id,role,status) VALUES(?,?,'owner','active')").bind(id,u.id),
     c.env.DB.prepare('INSERT INTO audit_events(id,organisation_id,actor_user_id,action,resource_type,resource_id) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),id,u.id,'create','organisation',id)
   ];
-  if(firstLocation)writes.push(c.env.DB.prepare('INSERT INTO locations(id,organisation_id,name,time_zone) VALUES(?,?,?,?)').bind(crypto.randomUUID(),id,firstLocation,zone));
+  for(const locationName of names)writes.push(c.env.DB.prepare('INSERT INTO locations(id,organisation_id,name,time_zone) VALUES(?,?,?,?)').bind(crypto.randomUUID(),id,locationName,zone));
   await c.env.DB.batch(writes);
   return c.json({organisation:{id,name,slug,country_code:country,currency_code:currency,time_zone:zone,role:'owner'}},201);
 });
