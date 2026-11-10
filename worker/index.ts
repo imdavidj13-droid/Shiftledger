@@ -102,14 +102,14 @@ app.get('/api/health',c=>c.json({ok:true,service:'shiftledger',api:'v1'}));
 app.post('/api/v1/auth/register',async c=>{
   if(!mailReady(c.env))return fail(c,'Email delivery has not been configured by the administrator.',503);
   const x=await body(c);if(!x)return fail(c,'Invalid JSON');
-  const email=safeStr(x.email,254).toLowerCase(),name=safeStr(x.name,80),password=x.password;
-  if(!isEmail(email)||name.length<2||typeof password!=='string'||!passValid(password))return fail(c,'Enter a name, valid email and a password of 12–128 characters.',422);
+  const email=safeStr(x.email,254).toLowerCase(),password=x.password;
+  if(!isEmail(email)||typeof password!=='string'||!passValid(password))return fail(c,'Enter a valid email and a password of 12–128 characters.',422);
   if(!testRecipientAllowed(c.env,email))return fail(c,'Registration is temporarily restricted to the configured development test account.',403);
   if(!await rateLimit(c,'register:'+email))return fail(c,'Too many attempts. Try again later.',429);
   const found=await c.env.DB.prepare('SELECT id FROM users WHERE email_normalized=?').bind(email).first();
   if(found)return c.json({ok:true,message:'If registration is available for this email, instructions will be sent.'});
   const id=crypto.randomUUID(),salt=rnd(16),hash=await derivePassword(password,salt);
-  await c.env.DB.prepare('INSERT INTO users(id,email_normalized,display_name,password_hash,password_salt) VALUES(?,?,?,?,?)').bind(id,email,name,hash,salt).run();
+  await c.env.DB.prepare('INSERT INTO users(id,email_normalized,display_name,password_hash,password_salt) VALUES(?,?,?,?,?)').bind(id,email,email,hash,salt).run();
   const token=await tokenFor(c,id,'verify_email');
   const link=appBaseUrl(c.env)+'/?verify='+encodeURIComponent(token);
   const sent=await sendMail(c,email,'Verify your ShiftLedger email','Verify your account by visiting: '+link+'\nThis link expires in 24 hours.');
