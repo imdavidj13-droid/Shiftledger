@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 
 export const PAGE_SLUGS = {
   Overview: 'overview', Schedule: 'schedule', Team: 'team', Timesheets: 'timesheets',
-  Leave: 'leave', 'Shift swaps': 'shift-swaps', Reports: 'reports', Settings: 'settings', Locations: 'locations', Access: 'access'
+  Leave: 'leave', 'Shift swaps': 'shift-swaps', Reports: 'reports', Settings: 'settings', Locations: 'locations', Access: 'access', Setup: 'setup'
 } as const;
 export type Page = keyof typeof PAGE_SLUGS;
 
