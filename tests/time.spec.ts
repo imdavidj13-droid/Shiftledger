@@ -34,3 +34,9 @@ test('calendar month uses the configured first day and local DST boundaries', as
   const transition = march.days[28];
   expect(Date.parse(transition.to) - Date.parse(transition.from)).toBe(23 * 3600000);
 });
+
+test('copying a shift preserves branch-local hours through daylight saving', async () => {
+  const { moveShiftTime } = await import('../src/time');
+  expect(moveShiftTime('2026-03-22T09:00:00.000Z', 'Europe/London', 7)).toBe('2026-03-29T08:00:00.000Z');
+  expect(() => moveShiftTime('2026-03-22T01:30:00.000Z', 'Europe/London', 7)).toThrow('does not exist');
+});

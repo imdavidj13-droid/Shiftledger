@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, write } from './api';
+import { RotaBatch } from './RotaBatch';
 import type { Location, Org } from './Locations';
 import { appPath, go, useRoute } from './routes';
-import { branchInstant, branchWallTime, formatShiftTime, formatShiftClock, isRepeatedTime, rotaDay, rotaMonth, rotaWeek } from './time';
+import { branchInstant, branchWallTime, formatShiftTime, formatShiftClock, isRepeatedTime, moveWallTime, rotaDay, rotaMonth, rotaWeek, shiftOccurrence } from './time';
 
 export type Shift = {
   id: string;
@@ -44,9 +45,9 @@ function calendarQuery(view: CalendarView, date: string) {
   return new URLSearchParams(view === 'month' ? { view, month: date } : { view, date });
 }
 
-async function loadShifts(base: string, query: URLSearchParams, view: CalendarView, signal: AbortSignal): Promise<ShiftPage> {
+async function loadShifts(base: string, query: URLSearchParams, paginate: boolean, signal: AbortSignal): Promise<ShiftPage> {
   const first = await api<ShiftPage>(base + '?' + query, { signal });
-  if (view === 'week') return first;
+  if (paginate) return first;
   const shifts = first.shifts;
   let cursor = first.nextCursor;
   while (cursor) {
@@ -64,7 +65,9 @@ export function Rota(props: Props) {
   const route = useRoute();
   const zone = locations.find(location => location.id === locationFilter)?.time_zone || org.time_zone;
   const params = route.searchParams;
-  const viewParam = params.get('view');
+  const isBulk = resourceId === 'bulk';
+  const shiftId = isBulk ? undefined : resourceId;
+  const viewParam = isBulk ? 'week' : params.get('view');
   const view: CalendarView = viewParam === 'month' || viewParam === 'day' ? viewParam : 'week';
   const week = rotaWeek(params.get('week') || params.get('date'), zone, org.week_start);
   const month = rotaMonth(params.get('month'), zone, org.week_start);
@@ -85,28 +88,29 @@ export function Rota(props: Props) {
   const [record, setRecord] = useState<Shift | null>(null);
   const [loadedPath, setLoadedPath] = useState('');
   const [error, setError] = useState('');
-  const cursor = view === 'week' ? params.get('cursor') : null;
+  const cursor = view === 'week' && !isBulk ? params.get('cursor') : null;
   const copyId = resourceId === 'new' ? params.get('copy') : null;
   const copyEndpoint = copyId ? base + '/' + encodeURIComponent(copyId) : null;
   const query = new URLSearchParams({ from: days[0].from, to: days[days.length - 1].to });
   if (locationFilter) query.set('location', locationFilter);
   if (cursor) query.set('cursor', cursor);
   const queryString = query.toString();
-  const endpoint = resourceId ? base + '/' + resourceId : base + '?' + queryString;
-  const loadKey = copyEndpoint || (resourceId ? endpoint : view + ':' + endpoint);
+  const endpoint = shiftId ? base + '/' + shiftId : base + '?' + queryString;
+  const paginate = view === 'week' && !isBulk;
+  const loadKey = copyEndpoint || (shiftId ? endpoint : String(paginate) + ':' + endpoint);
 
   useEffect(() => {
     setError('');
-    if (resourceId === 'new' && !copyEndpoint) return;
+    if (shiftId === 'new' && !copyEndpoint) return;
     const controller = new AbortController();
     const { signal } = controller;
-    const load = resourceId
+    const load = shiftId
       ? api<{ shift: Shift }>(copyEndpoint || endpoint, { signal }).then(data => { if (!signal.aborted) setRecord(data.shift); })
-      : loadShifts(base, new URLSearchParams(queryString), view, signal).then(data => { if (!signal.aborted) setResult(data); });
+      : loadShifts(base, new URLSearchParams(queryString), paginate, signal).then(data => { if (!signal.aborted) setResult(data); });
     void load.catch(reason => { if (!signal.aborted) setError(reason.message); })
       .finally(() => { if (!signal.aborted) setLoadedPath(loadKey); });
     return () => controller.abort();
-  }, [base, endpoint, resourceId, copyEndpoint, queryString, view, loadKey]);
+  }, [base, endpoint, shiftId, copyEndpoint, queryString, paginate, loadKey]);
 
   if (resourceId === 'new') return <><a className="btn outline" href={href()}>Back to rota</a>
     {!manage ? <p className="alert error" role="alert">Only schedulers can create shifts.</p> :
@@ -117,7 +121,14 @@ export function Rota(props: Props) {
   if (loadedPath !== loadKey) return <p role="status">Loading rota…</p>;
   if (error) return <><p className="alert error" role="alert">{error}</p><a className="btn outline" href={href()}>Back to rota</a></>;
 
-  if (resourceId && record) return <><a className="btn outline" href={href()}>Back to rota</a>
+  if (isBulk) return <>
+    <a className="btn outline" href={href()}>Back to rota</a>
+    {manage ? <RotaBatch key={loadKey} records={[...(result?.shifts ?? [])].reverse()} base={base} org={org}
+      from={days[0].from} to={days[6].to} back={href()}
+      targetWeek={weeks => href(undefined, 'week', moveWallTime(week.start + 'T00:00', weeks * 7).slice(0, 10))}/>
+      : <p className="alert error" role="alert">Only schedulers can copy or publish shifts.</p>}
+  </>;
+  if (shiftId && record) return <><a className="btn outline" href={href()}>Back to rota</a>
     <ShiftDetails key={record.id + '/' + record.revision} record={record} org={org} manage={manage} endpoint={endpoint}
       onChanged={async () => setRecord((await api<{ shift: Shift }>(endpoint)).shift)} onDiscard={() => go(href(), true)}
       copyHref={href('new') + '&copy=' + encodeURIComponent(record.id)} openShifts={openShifts}/>
@@ -140,6 +151,7 @@ export function Rota(props: Props) {
         <a className="btn outline" href={href(undefined, view, period.previous)}>Previous {view}</a>
         <a className="btn outline" href={href(undefined, view, view === 'month' ? today.slice(0, 7) : today)}>{view === 'week' ? 'This week' : 'Today'}</a>
         <a className="btn outline" href={href(undefined, view, period.next)}>Next {view}</a>
+        {manage && view === 'week' && <a className="btn outline" href={href('bulk')}>Copy or publish shifts</a>}
         {manage && <a className="btn primary" href={href('new')}>Create draft shift</a>}
       </div>
     </div>
@@ -261,8 +273,10 @@ function ShiftEditor({ locations, employees, assignments, locationFilter, openSh
   const [isOpen, setIsOpen] = useState(Boolean(initial?.is_open));
   const [start, setStart] = useState(initial ? branchWallTime(initial.starts_at_utc, initial.time_zone) : initialDate ? initialDate + 'T09:00' : '');
   const [end, setEnd] = useState(initial ? branchWallTime(initial.ends_at_utc, initial.time_zone) : initialDate ? initialDate + 'T17:00' : '');
-  const [startOccurrence, setStartOccurrence] = useState(initial && isRepeatedTime(start, initial.time_zone) && branchInstant(start, initial.time_zone) !== initial.starts_at_utc ? 'later' : 'earlier');
-  const [endOccurrence, setEndOccurrence] = useState(initial && isRepeatedTime(end, initial.time_zone) && branchInstant(end, initial.time_zone) !== initial.ends_at_utc ? 'later' : 'earlier');
+  const [startOccurrence, setStartOccurrence] = useState(initial ? shiftOccurrence(initial.starts_at_utc, initial.time_zone) : 'earlier');
+  const [endOccurrence, setEndOccurrence] = useState(initial ? shiftOccurrence(initial.ends_at_utc, initial.time_zone) : 'earlier');
+  const [occurrences, setOccurrences] = useState(1);
+  const [operationId] = useState(() => crypto.randomUUID());
   const [breakMinutes, setBreakMinutes] = useState(initial?.unpaid_break_minutes ?? 0);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -271,14 +285,23 @@ function ShiftEditor({ locations, employees, assignments, locationFilter, openSh
     assignments.some(assignment => assignment.employee_id === employee.id && assignment.location_id === locationId));
   async function save(event: FormEvent) {
     event.preventDefault();
+    if (!Number.isInteger(occurrences) || occurrences < 1 || occurrences > 12) return;
     setBusy(true); setError('');
     try {
-      const result = await write<{ shift: Shift }>(endpoint, {
-        locationId, employeeId: employeeId || null, isOpen, revision: shift?.revision,
-        startsAt: branchInstant(start, zone, startOccurrence as 'earlier' | 'later'),
-        endsAt: branchInstant(end, zone, endOccurrence as 'earlier' | 'later'), breakMinutes
-      }, shift ? 'PATCH' : 'POST');
-      await onSaved(result.shift.id);
+      const draftAt = (days: number) => ({
+        locationId, employeeId: employeeId || null, isOpen, breakMinutes,
+        startsAt: branchInstant(moveWallTime(start, days), zone, startOccurrence),
+        endsAt: branchInstant(moveWallTime(end, days), zone, endOccurrence)
+      });
+      if (!shift && occurrences > 1) {
+        const result = await write<{ shifts: Shift[] }>(endpoint + '/bulk-create', {
+          operationId, shifts: Array.from({ length: occurrences }, (_, index) => draftAt(index * 7))
+        });
+        await onSaved(result.shifts[0].id);
+      } else {
+        const result = await write<{ shift: Shift }>(endpoint, { ...draftAt(0), revision: shift?.revision }, shift ? 'PATCH' : 'POST');
+        await onSaved(result.shift.id);
+      }
     } catch (reason) { setError((reason as Error).message); }
     finally { setBusy(false); }
   }
@@ -301,15 +324,20 @@ function ShiftEditor({ locations, employees, assignments, locationFilter, openSh
         <label className="field">Start<input type="datetime-local" step={0.001} required value={start} onChange={event => {setStart(event.target.value);setStartOccurrence('earlier');}}/></label>
         <label className="field">End<input type="datetime-local" step={0.001} required value={end} onChange={event => {setEnd(event.target.value);setEndOccurrence('earlier');}}/></label>
       </div>
-      {isRepeatedTime(start, zone) && <label className="field">Start time occurrence<select value={startOccurrence} onChange={event => setStartOccurrence(event.target.value)}>
+      {isRepeatedTime(start, zone) && <label className="field">Start time occurrence<select value={startOccurrence} onChange={event => setStartOccurrence(event.target.value === 'later' ? 'later' : 'earlier')}>
         <option value="earlier">First occurrence</option><option value="later">Second occurrence</option>
       </select></label>}
-      {isRepeatedTime(end, zone) && <label className="field">End time occurrence<select value={endOccurrence} onChange={event => setEndOccurrence(event.target.value)}>
+      {isRepeatedTime(end, zone) && <label className="field">End time occurrence<select value={endOccurrence} onChange={event => setEndOccurrence(event.target.value === 'later' ? 'later' : 'earlier')}>
         <option value="earlier">First occurrence</option><option value="later">Second occurrence</option>
       </select></label>}
       <label className="field">Unpaid break (minutes)<input type="number" min={0} max={1440} required value={breakMinutes} onChange={event => setBreakMinutes(Number(event.target.value))}/></label>
       <p className="form-hint">{zone ? 'Enter local times in ' + zone + '.' : 'Select a branch to see its time zone.'}</p>
-      <button className="btn primary" disabled={busy || !zone}>{shift ? 'Save draft' : template ? 'Create duplicate draft' : 'Create draft'}</button>
+      {!shift && <label className="field">Weekly occurrences
+        <input type="number" min={1} max={12} required value={occurrences} onChange={event => setOccurrences(Number(event.target.value))}/>
+        <small className="form-hint">Includes this shift. Repeats use the same local times each week.</small>
+      </label>}
+      <button className="btn primary" disabled={busy || !zone}>{shift ? 'Save draft' : occurrences > 1
+        ? 'Create ' + occurrences + ' drafts' : template ? 'Create duplicate draft' : 'Create draft'}</button>
     </form>
   </section>;
 }

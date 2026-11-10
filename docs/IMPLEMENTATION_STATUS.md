@@ -11,8 +11,11 @@ Updated 10 November 2026. The master roadmap remains [FEATURE_BACKLOG.md](FEATUR
 - `npm ci`, `npm run verify` (29 tests), and Wrangler production dry-run passed locally. The Work environment used a loopback interface workaround and a compatible headless Chromium binary.
 - Migration `0006_open_shifts.sql` passed on disposable D1 and an upgrade fixture. Production application is awaiting explicit approval. The application keeps the existing scheduling path on a pre-0006 database and enables the open-shift controls once 0006 is present.
 - Holiday, sickness and other absence requests can be recorded, filtered, approved, declined or cancelled in the management UI. Staff can request and view their own leave through the API. Date boundaries use the branch time zone. Approvals warn about existing shifts, and approved leave blocks new scheduling, publication and vacancy assignment across branches. Audit events are recorded.
+- [Leave and rota conflicts (41fcdb8)](https://github.com/imdavidj13-droid/Shiftledger/commit/41fcdb8c0a2e4dfd5b501ebff8823308ce579f0b) passed [GitHub Actions](https://github.com/imdavidj13-droid/Shiftledger/actions/runs/42785477715). The live site served matching assets and returned HTTP 200 on readiness.
 - Leave validation passed `npm run verify` (31 tests) and the Wrangler production dry-run. Migration `0007_leave_requests.sql` is additive and awaits production approval. Until it is applied, the Leave module displays a database-update status and existing scheduling remains available.
-- Leave balances, availability/position eligibility, notification delivery, recurring rotas, templates and remaining P0–P3 release gates are still open. Hosted staging is outside the current deployment policy.
+- Schedulers can create up to 12 weekly draft occurrences, copy selected shifts up to 12 weeks ahead and publish up to 50 drafts together. D1 verifies the whole batch before saving and writes a batch audit event. Copying and repetition preserve branch-local time and reject nonexistent DST times. The bulk screen has a permanent schedule URL.
+- Bulk rota validation passed `npm run verify` (34 tests) and the Wrangler production dry-run. No new migration is required for bulk rota changes.
+- Leave balances, availability/position eligibility, notification delivery, editable recurring series, reusable templates and remaining P0–P3 release gates are still open. Hosted staging is outside the current deployment policy.
 
 ## Verified in local Workers and D1
 

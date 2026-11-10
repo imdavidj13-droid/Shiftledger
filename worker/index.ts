@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { registerShifts } from './shifts';
+import { registerShiftBatch } from './shift-batch';
 import { registerLeave } from './leave';
 import { registerInvitations } from './invitations';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
@@ -502,6 +503,7 @@ app.post('/api/v1/organisations/:orgId/employees',async c=>{
   return c.json({employee:{id,display_name:name,employment_status:'active'}},201);
 });
 registerShifts(app);
+registerShiftBatch(app);
 registerLeave(app);
 registerInvitations(app, currentUser);
 app.onError((_error,c)=>{

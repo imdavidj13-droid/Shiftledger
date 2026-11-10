@@ -179,3 +179,54 @@ test('manager creates an open shift and reviews a real claim from the calendar',
   await expect(page.getByText('approved', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Shared employee' })).toBeVisible();
 });
+
+test('bulk draft creation and publication are all-or-nothing and safe to retry', async ({ request }) => {
+  const operationId = crypto.randomUUID();
+  const shifts = [
+    { locationId: 'north', employeeId: 'shared', startsAt: '2040-06-04T09:00:00Z', endsAt: '2040-06-04T17:00:00Z' },
+    { locationId: 'south', employeeId: 'shared', startsAt: '2040-06-05T09:00:00Z', endsAt: '2040-06-05T17:00:00Z' }
+  ];
+  const create = path + '/bulk-create', publish = path + '/bulk-publish';
+  expect((await request.post(create, { ...employee, data: { operationId, shifts } })).status()).toBe(403);
+  expect((await request.post(create, { ...manager, data: { operationId, shifts } })).status()).toBe(409);
+  expect((await request.get(path + '/' + operationId + '-0', owner)).status()).toBe(404);
+  expect((await request.post(create, { ...owner, data: { operationId, shifts: [shifts[0], {...shifts[0]}] } })).status()).toBe(409);
+  const results = await Promise.all([1,2].map(() => request.post(create, { ...owner, data: { operationId, shifts } })));
+  expect(results.map(response => response.status()).sort()).toEqual([201,409]);
+  const drafts = (await results.find(response => response.status() === 201)!.json()).shifts;
+  const selections = drafts.map(({id,revision}) => ({id,revision}));
+  expect((await request.post(publish, { ...manager, data: { shifts: selections } })).status()).toBe(409);
+  expect((await request.post(publish, { ...owner, data: { shifts: [selections[0], {...selections[1],revision:2}] } })).status()).toBe(409);
+  expect((await (await request.get(path + '/' + drafts[0].id, owner)).json()).shift.status).toBe('draft');
+  const publishResults = await Promise.all([1,2].map(() => request.post(publish, { ...owner, data: { shifts: selections } })));
+  expect(publishResults.map(response => response.status()).sort()).toEqual([200,409]);
+  expect((await publishResults.find(response => response.status() === 200)!.json()).published).toBe(2);
+  for (const shift of drafts) expect((await request.get(path + '/' + shift.id, employee)).status()).toBe(200);
+});
+
+test('weekly repeats, copy-week and bulk publication are usable from Schedule', async ({ page, baseURL }) => {
+  await page.context().addCookies([{ name: 'sl_session', value: fixtureSessions[managerEmail], url: baseURL! }]);
+  await page.goto('/app/shop/schedule?view=day&date=2040-03-19&location=north');
+  await page.getByRole('link', { name: 'Create draft shift' }).click();
+  await page.getByRole('combobox', { name: 'Employee', exact: true }).selectOption('shared');
+  await page.getByLabel('Weekly occurrences').fill('2');
+  await page.getByRole('button', { name: 'Create 2 drafts' }).click();
+  await expect(page.getByRole('heading', { name: 'Edit draft shift' })).toBeVisible();
+  await page.getByRole('link', { name: 'Back to rota' }).click();
+  await page.getByRole('link', { name: 'Week', exact: true }).click();
+  await page.getByRole('link', { name: 'Copy or publish shifts' }).click();
+  await expect(page).toHaveURL(/schedule\/bulk\?week=.*&location=north$/);
+  await page.reload();
+  await page.getByRole('button', { name: 'Select all' }).click();
+  await expect(page.getByText('1 selected')).toBeVisible();
+  await page.getByLabel('Copy how many weeks ahead?').selectOption('3');
+  await page.getByRole('button', { name: 'Copy selected shifts' }).click();
+  await expect(page.getByRole('status')).toContainText('Copied 1 shift as a draft.');
+  await page.getByRole('link', { name: 'View rota' }).click();
+  await page.getByRole('link', { name: 'Copy or publish shifts' }).click();
+  await page.getByRole('button', { name: 'Select all' }).click();
+  await page.getByRole('button', { name: 'Publish selected drafts' }).click();
+  await expect(page.getByRole('status')).toContainText('Published 1 shift.');
+  await page.getByRole('link', { name: 'View rota' }).click();
+  await expect(page.getByRole('link', { name: /Shared employee.*published/ })).toBeVisible();
+});

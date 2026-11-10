@@ -100,9 +100,10 @@ See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope an
 - [x] Branch-filtered day and month calendar views with stable URLs, calendar navigation, individual shift links and overflow.
 - [ ] Additional list view and team or role filters.
 - [x] Create, edit and discard draft shifts with unpaid breaks and concurrent-edit protection.
-- [ ] Duplicate shifts, recurring patterns, shift templates, copy week, bulk edits, skill/position requirements and shift notes.
+- [x] Duplicate shifts, create up to 12 weekly draft occurrences, copy a selected week of shifts and publish batches. Branch-local hours are preserved across DST.
+- [ ] Saved recurring series, rota templates, bulk edits, skill/position requirements and shift notes.
 - [x] Permissioned single-shift publishing and cancellation with revisions, audit events and employee visibility.
-- [ ] Review state, updates to published shifts, bulk publishing and idempotent staff notifications.
+- [ ] Review state, updates to published shifts and idempotent staff notifications.
 - [ ] Conflict engine: overlapping shifts across locations, unavailability, approved leave, breaks, min/max hours, overtime warning, optional rest requirements, working-time rules as *configurable warnings* until jurisdiction-reviewed.
 - [x] Implement and locally test explicitly marked open shifts, one pending claim per vacancy and branch-scoped approval or decline.
 - [ ] Enable open shifts in production after approval of migration 0006. Finish eligibility rules for availability and positions, claim notifications and configurable auto-approval.

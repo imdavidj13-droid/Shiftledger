@@ -98,3 +98,16 @@ export function rotaMonth(requestedMonth: string | null, zone: string, firstDay:
     days: Array.from({ length: first.daysInMonth }, (_, index) => calendarDay(first.add({ days: index }), zone))
   };
 }
+
+export function moveWallTime(input: string, days: number) {
+  return Temporal.PlainDateTime.from(input).add({ days }).toString({ smallestUnit: 'millisecond' });
+}
+
+export function shiftOccurrence(instant: string, zone: string): 'earlier' | 'later' {
+  const local = branchWallTime(instant, zone);
+  return isRepeatedTime(local, zone) && branchInstant(local, zone) !== instant ? 'later' : 'earlier';
+}
+
+export function moveShiftTime(instant: string, zone: string, days: number) {
+  return branchInstant(moveWallTime(branchWallTime(instant, zone), days), zone, shiftOccurrence(instant, zone));
+}
