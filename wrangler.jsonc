@@ -7,8 +7,16 @@
     {
       "binding": "DB",
       "database_name": "shiftledger-db",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "2cf26224-48d7-42fe-aab9-a651f2b52342",
       "migrations_dir": "migrations"
     }
-  ]
+  ],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/api/*"
+    ]
+  }
 }
