@@ -12,7 +12,7 @@ const rnd = (bytes=32) => hex(crypto.getRandomValues(new Uint8Array(bytes)));
 async function sha(s: string) { return hex(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s)))); }
 async function derivePassword(password: string,salt: string) {
   const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);
-  const derived=await crypto.subtle.deriveBits({name:'PBKDF2',salt:new TextEncoder().encode(salt),iterations:310000,hash:'SHA-256'},key,256);
+  const derived=await crypto.subtle.deriveBits({name:'PBKDF2',salt:new TextEncoder().encode(salt),iterations:100000,hash:'SHA-256'},key,256);
   return hex(new Uint8Array(derived));
 }
 function validZone(s: string) { try { new Intl.DateTimeFormat('en-US',{timeZone:s});return true; }catch{return false;} }
