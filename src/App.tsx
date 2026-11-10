@@ -1,48 +1,19 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { LayoutDashboard, CalendarDays, UsersRound, Clock3, CalendarCheck2, ArrowLeftRight, BarChart3, Settings2, Plus, LogOut, Building2, MapPin, ShieldCheck, ArrowRight, CheckCircle2, AlertCircle, RefreshCcw } from 'lucide-react';
+import { appPath, go, parseWorkspace, signInDestination, useRoute, type Page } from './routes';
+import { api, ApiError, post, write } from './api';
+import { Locations, OrganisationSettings, type Location, type Org } from './Locations';
+import { branchInstant, formatShiftTime, isRepeatedTime } from './time';
+import { Invitations, JoinInvitation } from './Invitations';
 
 type User = {id:string;name:string;email:string};
-type Org = {id:string;name:string;slug:string;country_code:string;currency_code:string;time_zone:string;role:string};
-type Location = {id:string;name:string;time_zone:string};
-type Employee = {id:string;display_name:string;employment_status:string};
+type Employee = {id:string;display_name:string;employment_status:string;user_id?:string|null};
 type EmployeeLocation = {employee_id:string;location_id:string};
 type Shift = {id:string;location_id:string;employee_id:string|null;starts_at_utc:string;ends_at_utc:string;status:string};
 type AuthMode='login'|'register'|'forgot'|'reset'|'pending';
-type Page='Overview'|'Schedule'|'Team'|'Timesheets'|'Leave'|'Shift swaps'|'Reports'|'Settings';
-
-const PAGE_SLUGS: Record<Page,string> = {
- Overview:'overview',Schedule:'schedule',Team:'team',Timesheets:'timesheets',Leave:'leave','Shift swaps':'shift-swaps',Reports:'reports',Settings:'settings'
-};
-function appPath(organisationId:string,page:Page):string {
- return '/app/'+encodeURIComponent(organisationId)+'/'+PAGE_SLUGS[page];
-}
-function pathOrganisation():string|null {
- const match=window.location.pathname.match(/^\/app\/([^/]+)(?:\/[^/]+)?\/?$/);
- if(!match)return null;
- try{return decodeURIComponent(match[1]);}catch{return null;}
-}
-function pageForPath(organisationId:string):Page {
- const match=window.location.pathname.match(/^\/app\/([^/]+)\/([^/]+)\/?$/);
- if(!match)return 'Overview';
- let parsed:string;
- try{parsed=decodeURIComponent(match[1]);}catch{return 'Overview';}
- if(parsed!==organisationId)return 'Overview';
- return (Object.keys(PAGE_SLUGS) as Page[]).find(p=>PAGE_SLUGS[p]===match[2])||'Overview';
-}
-
 const nav: {name:Page;icon:typeof LayoutDashboard}[]=[
- {name:'Overview',icon:LayoutDashboard},{name:'Schedule',icon:CalendarDays},{name:'Team',icon:UsersRound},{name:'Timesheets',icon:Clock3},{name:'Leave',icon:CalendarCheck2},{name:'Shift swaps',icon:ArrowLeftRight},{name:'Reports',icon:BarChart3},{name:'Settings',icon:Settings2}
+ {name:'Overview',icon:LayoutDashboard},{name:'Schedule',icon:CalendarDays},{name:'Team',icon:UsersRound},{name:'Locations',icon:MapPin},{name:'Access',icon:ShieldCheck},{name:'Timesheets',icon:Clock3},{name:'Leave',icon:CalendarCheck2},{name:'Shift swaps',icon:ArrowLeftRight},{name:'Reports',icon:BarChart3},{name:'Settings',icon:Settings2}
 ];
-async function api<T>(path:string,options:RequestInit={}):Promise<T>{
- const res=await fetch('/api/v1'+path,{...options,credentials:'include',headers:{'Content-Type':'application/json',...options.headers}});
- const data: unknown = await res.json().catch(()=>({error:'Unexpected response from the server'}));
- if(!res.ok){
-  const message = typeof data === 'object' && data !== null && 'error' in data && typeof data.error === 'string' ? data.error : 'Request failed';
-  throw new Error(message);
- }
- return data as T;
-}
-const post=(path:string,value:unknown)=>api<any>(path,{method:'POST',body:JSON.stringify(value)});
 const initialZone=Intl.DateTimeFormat().resolvedOptions().timeZone||'Europe/London';
 function Alert({message,kind='error'}:{message:string;kind?:'error'|'success'}){return <div className={'alert '+kind} role="status">{kind==='error'?<AlertCircle size={19}/>:<CheckCircle2 size={19}/>}<span>{message}</span></div>}
 function Field({label,children}:{label:string;children:ReactNode}){return <label className="field"><span>{label}</span>{children}</label>}
@@ -76,7 +47,7 @@ function VerificationPage({token}:{token:string}){
     <h1>{state==='checking'?'Verifying your email…':state==='success'?'Email verified!':'Verification unsuccessful'}</h1>
     <p>{state==='checking'?'Checking your secure verification link.':state==='success'?'Your email address has been confirmed successfully. You can now sign in and set up your organisation.':error||'This verification link may have expired or already been used.'}</p>
     {state==='success'&&<div className="confirmation-success"><CheckCircle2 size={21}/> Your account is ready for sign in.</div>}
-    {state!=='checking'&&<a className="btn primary confirmation-action" href="/">Continue to sign in <ArrowRight size={18}/></a>}
+    {state!=='checking'&&<a className="btn primary confirmation-action" href="/sign-in">Continue to sign in <ArrowRight size={18}/></a>}
     {state==='failed'&&<p className="confirmation-help">If your link has expired, return to sign in and request a new verification email.</p>}
    </section>
   </div>
@@ -95,7 +66,7 @@ function VerificationPreview({failed}:{failed:boolean}){
     <h1>{failed?'Verification unsuccessful':'Email verified!'}</h1>
     <p>{failed?'This verification link is invalid or has expired. Return to sign in and request a new link.':'Your email address has been confirmed successfully. You can now sign in and set up your organisation.'}</p>
     {!failed&&<div className="confirmation-success"><CheckCircle2 size={21}/> Your account is ready for sign in.</div>}
-    <a className="btn primary confirmation-action" href="/">Continue to sign in <ArrowRight size={18}/></a>
+    <a className="btn primary confirmation-action" href="/sign-in">Continue to sign in <ArrowRight size={18}/></a>
     {failed&&<p className="confirmation-help">If your link has expired, return to sign in and request a new verification email.</p>}
    </section>
   </div>
@@ -103,40 +74,41 @@ function VerificationPreview({failed}:{failed:boolean}){
  </main>;
 }
 function Auth({onSuccess}:{onSuccess:()=>void}){
- const params=new URLSearchParams(window.location.search);
- const reset=params.get('reset');
- const [mode,setMode]=useState<AuthMode>(reset?'reset':window.location.pathname==='/register'?'register':window.location.pathname==='/forgot-password'?'forgot':'login');
+ const route = useRoute();
+ const reset = route.searchParams.get('reset');
+ const mode: AuthMode = reset?'reset':route.pathname==='/register'?'register':route.pathname==='/forgot-password'?'forgot':route.pathname==='/check-email'?'pending':'login';
  const [email,setEmail]=useState(''),[password,setPassword]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
- useEffect(()=>{
-  const sync=()=>{
-   const next=window.location.pathname;
-   setMode(next==='/register'?'register':next==='/forgot-password'?'forgot':next==='/check-email'?'pending':reset?'reset':'login');
-  };
-  window.addEventListener('popstate',sync);
-  return()=>window.removeEventListener('popstate',sync);
- },[reset]);
+ const [previousRoute,setPreviousRoute]=useState(route.href);
+ if (previousRoute !== route.href) {
+  setPreviousRoute(route.href);
+  setError('');
+  setMessage('');
+  setPassword('');
+ }
+ const returnPath = signInDestination(route.search);
+ const authPath=(path:string)=>path+(returnPath?'?next='+encodeURIComponent(returnPath):'');
  const selectMode=(next:AuthMode)=>{
-  setMode(next);setError('');setMessage('');
-  const path=next==='register'?'/register':next==='forgot'?'/forgot-password':next==='reset'?'/reset-password':next==='pending'?'/check-email':'/sign-in';
-  window.history.pushState({},'',path);
+  const path=next==='register'?'/register':next==='forgot'?'/forgot-password':next==='pending'?'/check-email':'/sign-in';
+  go(authPath(path));
  };
  async function submit(e:FormEvent){e.preventDefault();setError('');setMessage('');setBusy(true);
   try{
-   if(mode==='register'){const r=await post('/auth/register',{email,password});selectMode('pending');setMessage(r.message);setPassword('')}
+   if(mode==='register'){const r=await post('/auth/register',{email,password});setPreviousRoute(new URL(authPath('/check-email'),route).href);selectMode('pending');setMessage(r.message);setPassword('')}
    else if(mode==='login'){
     await post('/auth/login',{email,password});
-    const next=new URLSearchParams(window.location.search).get('next');
-    if(next&&/^\/app\/[a-zA-Z0-9_-]+\/[a-z-]+(?:\?location=[a-zA-Z0-9_-]+)?$/.test(next))window.history.replaceState({},'',next);
+    const next = signInDestination(route.search);
+    if (next) go(next, true);
     onSuccess();
    }
    else if(mode==='pending'){const r=await post('/auth/resend-verification',{email});setMessage(r.message)}
    else if(mode==='forgot'){const r=await post('/auth/forgot-password',{email});setMessage(r.message)}
-   else{await post('/auth/reset-password',{token:reset,password});window.history.replaceState({},'',window.location.pathname);selectMode('login');setMessage('Password updated. Sign in now.');setPassword('')}
+   else{await post('/auth/reset-password',{token:reset,password});setPreviousRoute(new URL('/sign-in',route).href);go('/sign-in',true);setMessage('Password updated. Sign in now.');setPassword('')}
   }catch(e){setError((e as Error).message)}finally{setBusy(false)}
  }
  return <div className="auth-layout"><div className="auth-art"><Brand/><div><span className="overline">THE WORKFORCE PLATFORM</span><h1>Run your team.<br/>Own your time.</h1><p>Scheduling, time tracking and team management. One secure home for your organisation.</p><div className="auth-points"><span>01 / Plan smarter</span><span>02 / Stay organised</span><span>03 / Grow together</span></div></div><small>SHIFTLEDGER — BUILT FOR REAL TEAMS</small></div>
  <div className="auth-side"><div className="auth-mobile-brand"><Brand/></div><div className="auth-card"><div className="overline">YOUR WORKSPACE STARTS HERE</div><h2>{mode==='login'?'Welcome back':mode==='register'?'Register your business':mode==='forgot'?'Reset your password':mode==='pending'?'Check your email':'Choose a new password'}</h2><p>{mode==='login'?'Sign in to manage your workforce.':mode==='register'?'Start with an email and password. We’ll set up your organisation after email verification.':mode==='forgot'?'We’ll email you a password-reset link.':mode==='pending'?'We sent a verification link to your email. Open it to activate your account.':'Enter a new password for your account.'}</p>
+ {returnPath?.startsWith('/join?')&&<p className="form-hint">Use the same email address as your invitation. If you need to register, verify your email and then return to this invitation.</p>}
  {error&&<Alert message={error}/ >}{message&&<Alert message={message} kind="success"/>}
  <form onSubmit={submit} className="form-stack">
  {mode!=='reset'&&<Field label={mode==='register'?'Work email address':'Email address'}><input type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)}/></Field>}
@@ -169,19 +141,18 @@ const timeZoneOptions = Array.from(new Set([
  initialZone
 ])).sort((a,b)=>a.localeCompare(b));
 function Onboard({refresh}:{refresh:()=>void}){
- useEffect(()=>{if(window.location.pathname!=='/onboarding')window.history.replaceState({},'', '/onboarding');},[]);
  const [step,setStep]=useState(1);
  const [orgName,setOrgName]=useState(''),[industry,setIndustry]=useState(''),[teamSize,setTeamSize]=useState('');
  const [country,setCountry]=useState('GB'),[currency,setCurrency]=useState('GBP'),[zone,setZone]=useState(initialZone);
  const [weekStart,setWeekStart]=useState(1),[timeFormat,setTimeFormat]=useState('24h');
- const [multiLocation,setMultiLocation]=useState(false),[locationNames,setLocationNames]=useState<string[]>(['']);
+ const [multiLocation,setMultiLocation]=useState(false),[branches,setBranches]=useState([{name:'',timeZone:''}]);
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
  const goNext=(e:FormEvent)=>{e.preventDefault();setError('');setStep(previous=>Math.min(3,previous+1));};
  function selectCountry(next:string){setCountry(next);const preset=countries.find(c=>c.code===next);if(preset){setCurrency(preset.currency);setZone(preset.zone);}}
  async function create(e:FormEvent){
    e.preventDefault();setBusy(true);setError('');
    try {
-    await post('/organisations',{name:orgName,countryCode:country,currencyCode:currency,timeZone:zone,industry:industry||null,teamSize:teamSize||null,weekStart,timeFormat,locations:multiLocation?locationNames.map(n=>n.trim()):locationNames[0]?.trim()?[locationNames[0].trim()]:[]});
+    await post('/organisations',{name:orgName,countryCode:country,currencyCode:currency,timeZone:zone,industry:industry||null,teamSize:teamSize||null,weekStart,timeFormat,locations:multiLocation?branches:branches[0]?.name.trim()?[branches[0]]:[]});
     refresh();
    }catch(err){setError((err as Error).message)}finally{setBusy(false)}
  }
@@ -213,15 +184,15 @@ function Onboard({refresh}:{refresh:()=>void}){
    </form>}
    {step===3&&<form className="form-stack" onSubmit={create}>
     <div className="workspace-choice"><Building2 size={23}/><div><strong>{orgName}</strong><span>{country} · {currency} · {zone}</span></div></div>
-    <Field label="Location setup"><select value={multiLocation?'multiple':'single'} onChange={e=>{const multiple=e.target.value==='multiple';setMultiLocation(multiple);setLocationNames(previous=>multiple&&previous.length===1?[previous[0],'']:previous);}}><option value="single">One location for now</option><option value="multiple">Multiple locations / branches</option></select></Field>
+    <Field label="Location setup"><select value={multiLocation?'multiple':'single'} onChange={e=>{const multiple=e.target.value==='multiple';setMultiLocation(multiple);setBranches(previous=>multiple&&previous.length===1?[previous[0],{name:'',timeZone:''}]:previous);}}><option value="single">One location for now</option><option value="multiple">Multiple locations / branches</option></select></Field>
     <p className="onboard-hint">{multiLocation?'Add up to 20 branches now. They will all share your organisation account, staff directory and subscription.':'You can add more locations later without creating another organisation.'}</p>
-    {multiLocation?<div className="form-stack">
-      {locationNames.map((locationName,index)=><div className="location-setup-row" key={index}>
-        <Field label={'Branch '+(index+1)}><input required minLength={2} maxLength={100} value={locationName} onChange={e=>setLocationNames(prev=>prev.map((n,i)=>i===index?e.target.value:n))} placeholder="e.g. City Centre Branch"/></Field>
-        {locationNames.length>1&&<button type="button" className="btn outline" onClick={()=>setLocationNames(prev=>prev.filter((_,i)=>i!==index))}>Remove</button>}
-      </div>)}
-      {locationNames.length<20&&<button type="button" className="btn outline" onClick={()=>setLocationNames(prev=>[...prev,''])}><Plus size={17}/> Add another branch</button>}
-    </div>:<Field label="First location name (optional)"><input value={locationNames[0]||''} onChange={e=>setLocationNames([e.target.value])} maxLength={100} placeholder="e.g. City Centre Branch"/></Field>}
+    {(multiLocation?branches:branches.slice(0,1)).map((branch,index)=><div className="branch-setup" key={index}>
+      <Field label={multiLocation?'Branch '+(index+1):'First location name (optional)'}><input required={multiLocation} minLength={2} maxLength={100} value={branch.name} onChange={e=>setBranches(prev=>prev.map((item,i)=>i===index?{...item,name:e.target.value}:item))} placeholder="e.g. City Centre Branch"/></Field>
+      {(multiLocation||branch.name.trim())&&<Field label={multiLocation?'Branch '+(index+1)+' time zone (optional)':'Branch time zone (optional)'}><input list="branch-time-zones" placeholder={zone} value={branch.timeZone} onChange={e=>setBranches(prev=>prev.map((item,i)=>i===index?{...item,timeZone:e.target.value}:item))}/></Field>}
+      {multiLocation&&branches.length>1&&<button type="button" className="btn outline" onClick={()=>setBranches(prev=>prev.filter((_,i)=>i!==index))}>Remove branch {index+1}</button>}
+    </div>)}
+    <datalist id="branch-time-zones">{timeZoneOptions.map(timeZone=><option key={timeZone} value={timeZone}/>)}</datalist>
+    {multiLocation&&branches.length<20&&<button type="button" className="btn outline" onClick={()=>setBranches(prev=>[...prev,{name:'',timeZone:''}])}><Plus size={17}/> Add another branch</button>}
     <div className="onboard-actions"><button type="button" className="btn outline" onClick={()=>setStep(2)}>Back</button><button className="btn primary" disabled={busy}>{busy?'Creating…':'Create organisation'} <ArrowRight size={18}/></button></div>
    </form>}
   </section>
@@ -229,109 +200,140 @@ function Onboard({refresh}:{refresh:()=>void}){
 }
 function Stat({title,value,note}:{title:string;value:string|number;note:string}){return <div className="stat-card"><div className="stat-label">{title}</div><strong>{value}</strong><span>{note}</span></div>}
 function Empty({icon,heading,description}:{icon:ReactNode;heading:string;description:string}){return <div className="empty">{icon}<h3>{heading}</h3><p>{description}</p></div>}
-function Dashboard({user,org,organisations,onLogout,onSwitch}:{user:User;org:Org;organisations:Org[];onLogout:()=>void;onSwitch:(id:string)=>void}){
- const [page,setPage]=useState<Page>(()=>pageForPath(org.id)),[error,setError]=useState(''),[success,setSuccess]=useState('');
- const [locationFilter,setLocationFilter]=useState(()=>new URLSearchParams(window.location.search).get('location')||'');
+function Dashboard({user,org,organisations,page,resourceId,locationFilter,onLogout,logoutError,onOrganisationChange}:{user:User;org:Org;organisations:Org[];page:Page;resourceId?:string;locationFilter:string;onLogout:()=>void;logoutError:string;onOrganisationChange:(org:Org)=>void}){
+ const [error,setError]=useState(''),[success,setSuccess]=useState('');
+ const [loading,setLoading]=useState(true);
+ const [loadFailed,setLoadFailed]=useState(false);
  const filterSuffix=(location:string)=>location?'?location='+encodeURIComponent(location):'';
- const navigate=(next:Page)=>{
-  window.history.pushState({},'',appPath(org.id,next)+filterSuffix(locationFilter));
-  setPage(next);setError('');setSuccess('');
- };
- const changeLocation=(location:string)=>{
-  setLocationFilter(location);
-  window.history.pushState({},'',appPath(org.id,page)+filterSuffix(location));
- };
- useEffect(()=>{
-  const sync=()=>{
-   setPage(pageForPath(org.id));
-   setLocationFilter(new URLSearchParams(window.location.search).get('location')||'');
-  };
-  window.addEventListener('popstate',sync);
-  if(pathOrganisation()!==org.id||window.location.pathname!==appPath(org.id,pageForPath(org.id))){
-   window.history.replaceState({},'',appPath(org.id,pageForPath(org.id))+window.location.search);
-  }
-  return()=>window.removeEventListener('popstate',sync);
- },[org.id]);
+ const navPath=(next:Page)=>appPath(org.id,next)+(['Locations','Access'].includes(next)?'':filterSuffix(locationFilter));
+ const changeLocation=(location:string)=>go(appPath(org.id,page)+filterSuffix(location));
  const [locations,setLocations]=useState<Location[]>([]),[employees,setEmployees]=useState<Employee[]>([]),[shifts,setShifts]=useState<Shift[]>([]);
  const [employeeLocations,setEmployeeLocations]=useState<EmployeeLocation[]>([]);
- const [locationName,setLocationName]=useState(''),[employeeName,setEmployeeName]=useState(''),[zone,setZone]=useState(org.time_zone);
+ const [employeeName,setEmployeeName]=useState('');
  const [newLocation,setNewLocation]=useState(''),[newEmployee,setNewEmployee]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState('');
+ const [startOccurrence,setStartOccurrence]=useState<'earlier'|'later'>('earlier');
+ const [endOccurrence,setEndOccurrence]=useState<'earlier'|'later'>('earlier');
+ const [breakMinutes,setBreakMinutes]=useState(0);
  const [busy,setBusy]=useState(false);
  const canManage=['owner','admin','manager'].includes(org.role);
- async function reload(){setError('');try{
+ const canAdminister=['owner','admin'].includes(org.role);
+ async function reload(){setError('');setLoadFailed(false);setLoading(true);try{
   const base='/organisations/'+org.id;
   const responses=await Promise.all([api<{locations:Location[]}>(base+'/locations'),canManage?api<{employees:Employee[]}>(base+'/employees'):Promise.resolve({employees:[]}),canManage?api<{shifts:Shift[]}>(base+'/shifts'):Promise.resolve({shifts:[]}),canManage?api<{assignments:EmployeeLocation[]}>(base+'/employee-locations'):Promise.resolve({assignments:[]})]);
   setLocations(responses[0].locations);setEmployees(responses[1].employees);setShifts(responses[2].shifts);setEmployeeLocations(responses[3].assignments);
- }catch(e){setError((e as Error).message)}}
+ }catch(e){setLoadFailed(true);setError((e as Error).message)}finally{setLoading(false)}}
  useEffect(()=>{void reload()},[org.id]);
- useEffect(()=>{
-  if(locationFilter&&locations.length&&!locations.some(l=>l.id===locationFilter)){
-   setLocationFilter('');
-   window.history.replaceState({},'',appPath(org.id,page));
-  }
- },[locations,locationFilter,org.id,page]);
  const filteredShifts=locationFilter?shifts.filter(s=>s.location_id===locationFilter):shifts;
+ const upcomingShifts=filteredShifts.filter(shift=>shift.status!=='cancelled'&&Date.parse(shift.ends_at_utc)>Date.now())
+  .sort((a,b)=>a.starts_at_utc.localeCompare(b.starts_at_utc));
+ const locationZone=(id:string)=>locations.find(location=>location.id===id)?.time_zone||org.time_zone;
+ const selectedZone=locations.find(location=>location.id===newLocation)?.time_zone;
+ const shiftTime=(instant:string,locationId:string)=>formatShiftTime(instant,locationZone(locationId),org.time_format);
  const filteredEmployees=locationFilter?employees.filter(e=>employeeLocations.some(a=>a.employee_id===e.id&&a.location_id===locationFilter)):employees;
- async function action(fn:()=>Promise<any>,done:string){setBusy(true);setError('');setSuccess('');try{await fn();setSuccess(done);await reload()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
+ async function action(fn:()=>Promise<unknown>,done:string){
+  setBusy(true);setError('');setSuccess('');
+  try{await fn();setSuccess(done);await reload();return true}
+  catch(e){setError((e as Error).message);return false}
+  finally{setBusy(false)}
+ }
  const base='/organisations/'+org.id;
- return <div className="app"><aside className="sidebar"><Brand/><div className="workspace"><div className="workspace-icon">{org.name.charAt(0).toUpperCase()}</div><div><strong>{org.name}</strong><small>{org.role}</small></div></div>{organisations.length>1&&<select className="org-picker" aria-label="Switch organisation" value={org.id} onChange={e=>onSwitch(e.target.value)}>{organisations.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select>}<div className="nav-label">LOCATIONS</div><select className="org-picker" aria-label="Filter workspace by location" value={locationFilter} onChange={e=>changeLocation(e.target.value)}><option value="">All locations</option>{locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select><div className="nav-label">WORKSPACE</div><nav>{nav.map(({name,icon:Icon})=><a key={name} href={appPath(org.id,name)+filterSuffix(locationFilter)} aria-current={page===name?'page':undefined} className={'nav-item '+(page===name?'selected':'')} onClick={event=>{if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();navigate(name);}}><Icon size={19}/><span>{name}</span></a>)}</nav><div className="sidebar-bottom"><div className="sidebar-callout"><ShieldCheck size={23}/><strong>Your data, your organisation.</strong><span>All workspace requests are checked on the server.</span></div><button className="profile" onClick={onLogout}><span className="profile-icon">{user.name.charAt(0).toUpperCase()}</span><span><strong>{user.name}</strong><small>Sign out</small></span><LogOut size={18}/></button></div></aside>
- <div className="main"><header className="topbar"><div className="breadcrumb"><span>{org.name}</span><b>/</b><strong>{page}</strong></div><div className="top-right"><select className="top-location-picker" aria-label="Filter by location" value={locationFilter} onChange={e=>changeLocation(e.target.value)}><option value="">All locations</option>{locations.map(l=><option value={l.id} key={l.id}>{l.name}</option>)}</select><span className="role-tag">{org.role}</span><span className="profile-icon">{user.name.charAt(0).toUpperCase()}</span></div></header>
- <main className="page"><div className="overline">SHIFTLEDGER / {page.toUpperCase()}</div><div className="page-heading"><div><h1>{page==='Overview'?'Your workforce, organised.':page}</h1><p>{page==='Overview'?'Your live organisation overview.':'Manage '+page.toLowerCase()+' for '+org.name+'.'}</p></div><button className="btn outline" onClick={()=>void reload()}><RefreshCcw size={17}/> Refresh</button></div>
- {error&&<Alert message={error}/ >}{success&&<Alert message={success} kind="success"/>}
- {page==='Overview'&&<><div className="hero-strip"><div><span>YOUR ORGANISATION</span><h2>{org.name}</h2><p>{org.country_code} · {org.time_zone} · {org.currency_code}</p></div><span className="hero-role">{locationFilter?locations.find(l=>l.id===locationFilter)?.name||'BRANCH':org.role.toUpperCase()}</span></div><div className="stats"><Stat title="Team members" value={canManage?filteredEmployees.length:'—'} note={locationFilter?'Assigned to selected branch':'Organisation directory records'}/><Stat title="Locations" value={locationFilter?1:locations.length} note={locationFilter?'Selected branch':'Operating sites'}/><Stat title="Shifts" value={canManage?filteredShifts.length:'—'} note="Created records"/><Stat title="Published shifts" value={canManage?filteredShifts.filter(s=>s.status==='published').length:'—'} note="Awaiting publication workflow"/></div><div className="two-col"><section className="panel"><div className="panel-title"><h2>Upcoming shifts</h2><span>From your live database</span></div>{filteredShifts.length? <div className="records">{filteredShifts.slice(0,6).map(s=><div className="record" key={s.id}><CalendarDays size={19}/><div><strong>{new Date(s.starts_at_utc).toLocaleString()}</strong><small>{s.status} · {locations.find(l=>l.id===s.location_id)?.name||'Location'}</small></div></div>)}</div>:<Empty icon={<CalendarDays size={32}/>} heading="No shifts created" description="Add a location and employee, then create your first draft shift."/>}</section><section className="panel"><div className="panel-title"><h2>Getting started</h2><span>Organisation setup</span></div><div className="steps"><div><b>01</b><span><strong>Organisation created</strong><small>Your workspace is ready.</small></span><CheckCircle2 size={18}/></div><div><b>02</b><span><strong>Add locations</strong><small>Set up the places you operate.</small></span></div><div><b>03</b><span><strong>Add your team</strong><small>Create employee directory records.</small></span></div><div><b>04</b><span><strong>Plan shifts</strong><small>Draft a schedule for your team.</small></span></div></div></section></div></>}
- {page==='Settings'&&<><div className="two-col"><section className="panel"><div className="panel-title"><h2>Organisation settings</h2></div><div className="details"><div><span>Name</span><strong>{org.name}</strong></div><div><span>Country</span><strong>{org.country_code}</strong></div><div><span>Time zone</span><strong>{org.time_zone}</strong></div><div><span>Currency</span><strong>{org.currency_code}</strong></div><div><span>Your role</span><strong>{org.role}</strong></div></div></section>{['owner','admin'].includes(org.role)&&<section className="panel"><div className="panel-title"><h2>Add a location</h2></div><form className="form-stack pad" onSubmit={e=>{e.preventDefault();void action(()=>post(base+'/locations',{name:locationName,timeZone:zone}),'Location created.');setLocationName('')}}><Field label="Location name"><input required minLength={2} value={locationName} onChange={e=>setLocationName(e.target.value)}/></Field><Field label="Time zone"><input required value={zone} onChange={e=>setZone(e.target.value)}/></Field><button className="btn primary" disabled={busy}><Plus size={17}/> Add location</button></form></section>}</div><section className="panel location-directory"><div className="panel-title"><h2>Business locations</h2><span>{locations.length} locations in this workspace</span></div>{locations.length?<div className="records">{locations.map(l=><div className="record" key={l.id}><MapPin size={21}/><div><strong>{l.name}</strong><small>{l.time_zone} · Location within {org.name}</small></div></div>)}</div>:<Empty icon={<MapPin size={30}/>} heading="No locations configured" description="Add your first branch or workplace above."/>}</section></>}
- {page==='Team'&&<div className="two-col"><section className="panel"><div className="panel-title"><h2>Employee directory</h2><span>{filteredEmployees.length} records</span></div>{filteredEmployees.length?<div className="records">{filteredEmployees.map(e=><div className="record" key={e.id}><UsersRound size={20}/><div className="employee-row"><strong>{e.display_name}</strong><small>{e.employment_status} · {employeeLocations.filter(x=>x.employee_id===e.id).map(x=>locations.find(l=>l.id===x.location_id)?.name).filter(Boolean).join(', ')||'No location assigned'}</small>{['owner','admin'].includes(org.role)&&<select aria-label={'Assign location to '+e.display_name} value="" disabled={busy||!locations.length} onChange={event=>{const locationId=event.target.value;if(locationId)void action(()=>post(base+'/employee-locations',{employeeId:e.id,locationId}),'Location assigned to employee.')}}><option value="">Assign to a location…</option>{locations.filter(l=>!employeeLocations.some(x=>x.employee_id===e.id&&x.location_id===l.id)).map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select>}</div></div>)}</div>:<Empty icon={<UsersRound size={33}/>} heading="No employees yet" description="Create your first employee directory record."/>}</section>{['owner','admin'].includes(org.role)&&<section className="panel"><div className="panel-title"><h2>Add employee</h2></div><form className="form-stack pad" onSubmit={e=>{e.preventDefault();void action(async()=>{const result=await post(base+'/employees',{name:employeeName});if(locationFilter)await post(base+'/employee-locations',{employeeId:result.employee.id,locationId:locationFilter});},'Employee added'+(locationFilter?' to the selected location.':'.'));setEmployeeName('')}}><Field label="Full name"><input required minLength={2} value={employeeName} onChange={e=>setEmployeeName(e.target.value)}/></Field><div className="form-hint">One employee record can be assigned to several branches. Staff invitations are a separate workflow.</div><button disabled={busy} className="btn primary"><Plus size={17}/> Add employee</button></form></section>}</div>}
- {page==='Schedule'&&<div className="two-col"><section className="panel"><div className="panel-title"><h2>Shift planner</h2><span>{filteredShifts.length} records</span></div>{filteredShifts.length?<div className="records">{filteredShifts.map(s=><div className="record" key={s.id}><CalendarDays size={20}/><div><strong>{new Date(s.starts_at_utc).toLocaleString()} – {new Date(s.ends_at_utc).toLocaleString()}</strong><small>{s.status} · {employees.find(e=>e.id===s.employee_id)?.display_name||'Unassigned'} · {locations.find(l=>l.id===s.location_id)?.name||'Location'}</small></div></div>)}</div>:<Empty icon={<CalendarDays size={33}/>} heading="Your schedule is empty" description="Add a location and team member before creating a shift."/>}</section>{canManage&&<section className="panel"><div className="panel-title"><h2>Create draft shift</h2></div><form className="form-stack pad" onSubmit={e=>{e.preventDefault();void action(()=>post(base+'/shifts',{locationId:newLocation,employeeId:newEmployee||null,startsAt:new Date(start).toISOString(),endsAt:new Date(end).toISOString(),breakMinutes:0}),'Draft shift created.')}}><Field label="Location"><select required value={newLocation} onChange={e=>{setNewLocation(e.target.value);setNewEmployee('')}}><option value="">Select a location</option>{locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></Field><Field label="Employee"><select value={newEmployee} onChange={e=>setNewEmployee(e.target.value)}><option value="">Unassigned</option>{employees.filter(x=>newLocation&&employeeLocations.some(a=>a.employee_id===x.id&&a.location_id===newLocation)).map(x=><option key={x.id} value={x.id}>{x.display_name}</option>)}</select></Field><Field label="Start (local browser time)"><input type="datetime-local" required value={start} onChange={e=>setStart(e.target.value)}/></Field><Field label="End (local browser time)"><input type="datetime-local" required value={end} onChange={e=>setEnd(e.target.value)}/></Field><div className="form-hint">Draft only. Shift publication and staff notifications are not enabled yet.</div><button className="btn primary" disabled={busy||!locations.length}><Plus size={17}/> Create draft shift</button></form></section>}</div>}
+ return <div className="app"><aside className="sidebar"><Brand/><div className="workspace"><div className="workspace-icon">{org.name.charAt(0).toUpperCase()}</div><div><strong>{org.name}</strong><small>{org.role}</small></div></div>{organisations.length>1&&<select className="org-picker" aria-label="Switch organisation" value={org.id} onChange={e=>go(appPath(e.target.value,'Overview'))}>{organisations.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select>}<div className="nav-label">LOCATIONS</div><select className="org-picker" aria-label="Filter workspace by location" value={locationFilter} onChange={e=>changeLocation(e.target.value)}><option value="">All locations</option>{locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select><div className="nav-label">WORKSPACE</div><nav>{nav.filter(item=>item.name!=='Access'||canAdminister).map(({name,icon:Icon})=><a key={name} href={navPath(name)} aria-label={name} aria-current={page===name?'page':undefined} className={'nav-item '+(page===name?'selected':'')} onClick={event=>{if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();setError('');setSuccess('');go(navPath(name));}}><Icon size={19}/><span>{name}</span></a>)}</nav><div className="sidebar-bottom"><div className="sidebar-callout"><ShieldCheck size={23}/><strong>Your data, your organisation.</strong><span>All workspace requests are checked on the server.</span></div><button className="profile" onClick={onLogout} aria-label="Sign out"><span className="profile-icon">{user.name.charAt(0).toUpperCase()}</span><span><strong>{user.name}</strong><small>Sign out</small></span><LogOut size={18}/></button></div></aside>
+ <div className="main"><header className="topbar"><div className="breadcrumb"><span>{org.name}</span><b>/</b><strong>{page}</strong></div><div className="top-right"><select className="top-location-picker" aria-label="Filter by location" value={locationFilter} onChange={e=>changeLocation(e.target.value)}><option value="">All locations</option>{locations.map(l=><option value={l.id} key={l.id}>{l.name}</option>)}</select><span className="role-tag">{org.role}</span><button className="mobile-sign-out" aria-label="Sign out" onClick={onLogout}><LogOut size={18}/></button></div></header>
+ <main className="page"><div className="overline">SHIFTLEDGER / {page.toUpperCase()}</div><div className="page-heading"><div><h1>{page==='Overview'?'Your workforce, organised.':page}</h1><p>{page==='Overview'?'Your live organisation overview.':'Manage '+page.toLowerCase()+' for '+org.name+'.'}</p></div><button className="btn outline" onClick={()=>void reload()} disabled={loading}><RefreshCcw size={17}/> Refresh</button></div>
+ {(error||logoutError)&&<Alert message={error||logoutError}/>}
+ {success&&<Alert message={success} kind="success"/>}
+ {loading?<p role="status">Loading workspace data…</p>:loadFailed?null:
+ locationFilter&&!locations.some(l=>l.id===locationFilter)?<Alert message="This location is unavailable or you do not have access."/>:<>
+ {page==='Overview'&&<><div className="hero-strip"><div><span>YOUR ORGANISATION</span><h2>{org.name}</h2><p>{org.country_code} · {org.time_zone} · {org.currency_code}</p></div><span className="hero-role">{locationFilter?locations.find(l=>l.id===locationFilter)?.name||'BRANCH':org.role.toUpperCase()}</span></div><div className="stats"><Stat title="Team members" value={canManage?filteredEmployees.length:'—'} note={locationFilter?'Assigned to selected branch':'Organisation directory records'}/><Stat title="Locations" value={locationFilter?1:locations.length} note={locationFilter?'Selected branch':'Operating sites'}/><Stat title="Recent shift records" value={canManage?filteredShifts.length:'—'} note="Up to 200 latest records"/><Stat title="Published in recent records" value={canManage?filteredShifts.filter(s=>s.status==='published').length:'—'} note="Based on the same records"/></div><div className="two-col"><section className="panel"><div className="panel-title"><h2>Upcoming shifts</h2><span>From your live database</span></div>{upcomingShifts.length? <div className="records">{upcomingShifts.slice(0,6).map(s=><div className="record" key={s.id}><CalendarDays size={19}/><div><strong>{shiftTime(s.starts_at_utc,s.location_id)}</strong><small>{s.status} · {locations.find(l=>l.id===s.location_id)?.name||'Location'}</small></div></div>)}</div>:<Empty icon={<CalendarDays size={32}/>} heading="No upcoming shifts" description="Upcoming shifts for this workspace appear here."/>}</section><section className="panel"><div className="panel-title"><h2>Getting started</h2><span>Organisation setup</span></div><div className="steps"><div><b>01</b><span><strong>Organisation created</strong><small>Your workspace is ready.</small></span><CheckCircle2 size={18}/></div><div><b>02</b><span><strong>Add locations</strong><small>Set up the places you operate.</small></span></div><div><b>03</b><span><strong>Add your team</strong><small>Create employee directory records.</small></span></div><div><b>04</b><span><strong>Plan shifts</strong><small>Draft a schedule for your team.</small></span></div></div></section></div></>}
+ {page==='Settings'&&<OrganisationSettings org={org} onSave={onOrganisationChange}/>}
+ {page==='Access'&&(canAdminister?<Invitations org={org} locations={locations} employees={employees}/>:<Alert message="Only owners and administrators can manage access."/>)}
+ {page==='Locations'&&<Locations key={resourceId??'directory'} org={org} resourceId={resourceId} locations={locations} onLocationsChanged={reload}/>}
+ {page==='Team'&&<div className="two-col"><section className="panel"><div className="panel-title"><h2>Employee directory</h2><span>{filteredEmployees.length} records</span></div>{filteredEmployees.length?<div className="records">{filteredEmployees.map(e=><div className="record" key={e.id}><UsersRound size={20}/><div className="employee-row"><strong>{e.display_name}</strong><small>{e.employment_status} · {employeeLocations.filter(x=>x.employee_id===e.id).map(x=>locations.find(l=>l.id===x.location_id)?.name).filter(Boolean).join(', ')||'No location assigned'}</small>{['owner','admin'].includes(org.role)&&<><div className="assignment-actions">{employeeLocations.filter(a=>a.employee_id===e.id).map(a=>{
+  const location=locations.find(l=>l.id===a.location_id);
+  return location&&<button type="button" className="btn outline" key={location.id} disabled={busy} onClick={()=>void action(()=>write(base+'/employee-locations/'+e.id+'/'+location.id,{},'DELETE'),'Location assignment removed.')}>Remove {location.name}</button>;
+ })}</div><select aria-label={'Assign location to '+e.display_name} value="" disabled={busy||!locations.length} onChange={event=>{const locationId=event.target.value;if(locationId)void action(()=>post(base+'/employee-locations',{employeeId:e.id,locationId}),'Location assigned to employee.')}}><option value="">Assign to a location…</option>{locations.filter(l=>!employeeLocations.some(x=>x.employee_id===e.id&&x.location_id===l.id)).map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></>}</div></div>)}</div>:<Empty icon={<UsersRound size={33}/>} heading="No employees yet" description="Create your first employee directory record."/>}</section>{['owner','admin'].includes(org.role)&&<section className="panel"><div className="panel-title"><h2>Add employee</h2></div><form className="form-stack pad" onSubmit={e=>{e.preventDefault();void action(()=>post(base+'/employees',{name:employeeName,locationId:locationFilter}),'Employee added'+(locationFilter?' to the selected location.':'.')).then(ok=>{if(ok)setEmployeeName('')})}}><Field label="Full name"><input required minLength={2} value={employeeName} onChange={e=>setEmployeeName(e.target.value)}/></Field><div className="form-hint">One employee record can be assigned to several branches. Use Access to invite them to sign in.</div><button disabled={busy} className="btn primary"><Plus size={17}/> Add employee</button></form></section>}</div>}
+ {page==='Schedule'&&<div className="two-col">
+ <section className="panel"><div className="panel-title"><h2>Shift planner</h2><span>{filteredShifts.length} recent records</span></div>
+ {filteredShifts.length?<div className="records">{filteredShifts.map(shift=><div className="record" key={shift.id}><CalendarDays size={20}/><div>
+ <strong>{shiftTime(shift.starts_at_utc,shift.location_id)} – {shiftTime(shift.ends_at_utc,shift.location_id)}</strong>
+ <small>{shift.status} · {employees.find(employee=>employee.id===shift.employee_id)?.display_name||'Unassigned'} · {locations.find(location=>location.id===shift.location_id)?.name||'Location'}</small></div></div>)}</div>:
+ <Empty icon={<CalendarDays size={33}/>} heading="Your schedule is empty" description="Shifts for this workspace appear here."/>}</section>
+ {canManage&&<section className="panel"><div className="panel-title"><h2>Create draft shift</h2></div>
+ <form className="form-stack pad" onSubmit={event=>{
+  event.preventDefault();
+  if(!selectedZone)return;
+  void action(()=>post(base+'/shifts',{
+   locationId:newLocation,employeeId:newEmployee||null,startsAt:branchInstant(start,selectedZone,startOccurrence),
+   endsAt:branchInstant(end,selectedZone,endOccurrence),breakMinutes
+  }),'Draft shift created.');
+ }}>
+ <Field label="Location"><select required value={newLocation} onChange={event=>{setNewLocation(event.target.value);setNewEmployee('');setStartOccurrence('earlier');setEndOccurrence('earlier')}}>
+ <option value="">Select a location</option>{locations.map(location=><option key={location.id} value={location.id}>{location.name}</option>)}</select></Field>
+ <Field label="Employee"><select value={newEmployee} onChange={event=>setNewEmployee(event.target.value)}><option value="">Unassigned</option>
+ {employees.filter(employee=>employee.employment_status==='active'&&employeeLocations.some(assignment=>assignment.employee_id===employee.id&&assignment.location_id===newLocation)).map(employee=><option key={employee.id} value={employee.id}>{employee.display_name}</option>)}</select></Field>
+ <Field label={'Start'+(selectedZone?' ('+selectedZone+')':'')}><input type="datetime-local" required value={start} onChange={event=>{setStart(event.target.value);setStartOccurrence('earlier')}}/></Field>
+ {selectedZone&&isRepeatedTime(start,selectedZone)&&<Field label="Start time occurrence"><select value={startOccurrence} onChange={event=>setStartOccurrence(event.target.value as 'earlier'|'later')}><option value="earlier">First occurrence</option><option value="later">Second occurrence</option></select></Field>}
+ <Field label={'End'+(selectedZone?' ('+selectedZone+')':'')}><input type="datetime-local" required value={end} onChange={event=>{setEnd(event.target.value);setEndOccurrence('earlier')}}/></Field>
+ {selectedZone&&isRepeatedTime(end,selectedZone)&&<Field label="End time occurrence"><select value={endOccurrence} onChange={event=>setEndOccurrence(event.target.value as 'earlier'|'later')}><option value="earlier">First occurrence</option><option value="later">Second occurrence</option></select></Field>}
+ <Field label="Unpaid break (minutes)"><input type="number" min={0} max={1440} required value={breakMinutes} onChange={event=>setBreakMinutes(Number(event.target.value))}/></Field>
+ <p className="form-hint">Times use the selected location’s time zone. Drafts are visible to authorised schedulers.</p>
+ <button className="btn primary" disabled={busy||!locations.length}><Plus size={17}/> Create draft shift</button>
+ </form></section>}</div>}
  {(['Timesheets','Leave','Shift swaps','Reports'] as Page[]).includes(page)&&<section className="panel"><div className="panel-title"><h2>{page} module</h2><span>Not enabled</span></div><Empty icon={<ShieldCheck size={33}/>} heading="Not yet available" description="This module will not accept or simulate employee data until its API, permissions and approval flow are implemented."/></section>}
+ </>}
  <footer>© ShiftLedger · Real organisation data · No simulated statistics</footer></main></div></div>;
 }
 function App(){
- const verificationToken=new URLSearchParams(window.location.search).get('verify');
- const [user,setUser]=useState<User|null>(null),[orgs,setOrgs]=useState<Org[]>([]),[org,setOrg]=useState<Org|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ const route=useRoute();
+ const verificationToken=route.searchParams.get('verify');
+ const workspace=parseWorkspace(route.pathname);
+ const inviteToken=route.pathname==='/join'?route.searchParams.get('token'):null;
+ const [user,setUser]=useState<User|null>(null),[orgs,setOrgs]=useState<Org[]|null>(null);
+ const [loading,setLoading]=useState(true),[error,setError]=useState(''),[logoutError,setLogoutError]=useState('');
  async function refresh(){
+  setLoading(true);setError('');
   try {
    const account=await api<{user:User}>('/auth/me');
    setUser(account.user);
-  }catch(e){
-   const msg=(e as Error).message;
-   if(msg==='Sign in required'){
-    setUser(null);setOrgs([]);setOrg(null);setError('');
-    const requested=window.location.pathname+window.location.search;
-    if(requested.startsWith('/app/'))window.history.replaceState({},'', '/sign-in?next='+encodeURIComponent(requested));
-   }else{
-    setError('Could not check your session. Please refresh the page.');
-   }
-   setLoading(false);
-   return;
-  }
-  try {
    const result=await api<{organisations:Org[]}>('/organisations');
    setOrgs(result.organisations);
-   setOrg(current=>result.organisations.find(o=>o.id===pathOrganisation())||result.organisations.find(o=>o.id===current?.id)||result.organisations[0]||null);
-   setError('');
-  }catch(e){
-   // A workspace-list failure must never discard an already authenticated user.
-   setError('Unable to load your organisations: '+(e as Error).message);
-  }finally{
-   setLoading(false);
-  }
+  }catch(reason){
+   if(reason instanceof ApiError&&reason.status===401){
+    setUser(null);setOrgs(null);
+    const requested=window.location.pathname+window.location.search;
+    if(parseWorkspace(window.location.pathname)||window.location.pathname==='/join')go('/sign-in?next='+encodeURIComponent(requested),true);
+   }else{
+    setError('Could not load your workspace. '+(reason as Error).message);
+   }
+  }finally{setLoading(false)}
  }
- useEffect(()=>{void refresh()},[]);
+ useEffect(()=>{if(!verificationToken)void refresh()},[verificationToken]);
  useEffect(()=>{
-  const syncOrganisation=()=>{
-   const selected=pathOrganisation();
-   if(selected)setOrg(current=>orgs.find(o=>o.id===selected)||current);
-  };
-  window.addEventListener('popstate',syncOrganisation);
-  return()=>window.removeEventListener('popstate',syncOrganisation);
- },[orgs]);
- async function logout(){try{await post('/auth/logout',{})}finally{window.history.pushState({},'', '/sign-in');setUser(null);setOrg(null);setOrgs([])}}
- if(verificationToken)return <VerificationPage token={verificationToken}/>;
- if(window.location.pathname==='/preview/email-verified')return <VerificationPreview failed={false}/>;
- if(window.location.pathname==='/preview/email-verification-failed')return <VerificationPreview failed={true}/>;
- if(loading)return <div className="loading"><Brand/><p>Connecting to your workspace…</p></div>;
- if(!user)return <>{error&&<div className="floating-error"><Alert message={error}/></div>}<Auth onSuccess={()=>void refresh()}/></>;
- if(!org)return <Onboard refresh={()=>void refresh()}/>;
- return <Dashboard key={org.id} user={user} org={org} organisations={orgs} onLogout={()=>void logout()} onSwitch={id=>{const next=orgs.find(o=>o.id===id);if(next){window.history.pushState({},'',appPath(id,'Overview'));setOrg(next);}}}/>;
+  if(loading||error||!user||!orgs||verificationToken||route.searchParams.has('reset'))return;
+  if(route.pathname==='/'||['/sign-in','/register','/check-email','/forgot-password'].includes(route.pathname)){
+   const next=signInDestination(route.search);
+   go(next||(orgs.length?appPath(orgs[0].id,'Overview'):'/onboarding'),true);
+  }
+ },[loading,error,user,orgs,verificationToken,route.href]);
+ async function logout(){
+  try{
+   await post('/auth/logout',{});
+   setUser(null);setOrgs(null);setLogoutError('');go('/sign-in',true);
+  }catch(reason){setLogoutError('Could not sign out. '+(reason as Error).message)}
+ }
+ if(verificationToken)return <VerificationPage key={verificationToken} token={verificationToken}/>;
+ if(route.pathname==='/preview/email-verified')return <VerificationPreview failed={false}/>;
+ if(route.pathname==='/preview/email-verification-failed')return <VerificationPreview failed={true}/>;
+ if(loading)return <div className="loading"><Brand/><p role="status">Connecting to your workspace…</p></div>;
+ if(error)return <div className="loading"><Brand/><Alert message={error}/><button className="btn primary" onClick={()=>void refresh()}>Retry</button>{user&&<button className="btn outline" onClick={()=>void logout()}>Sign out</button>}{logoutError&&<Alert message={logoutError}/>}</div>;
+ if(inviteToken&&user)return <JoinInvitation token={inviteToken} email={user.email}
+  onJoin={id=>{go(appPath(id,'Overview'),true);void refresh()}}
+  onSwitch={async()=>{await post('/auth/logout',{});setUser(null);setOrgs(null);go('/sign-in?next='+encodeURIComponent(route.pathname+route.search),true)}}/>;
+ if(!user||route.searchParams.has('reset'))return <Auth onSuccess={()=>void refresh()}/>;
+ if(route.pathname==='/onboarding'&&!orgs?.length)return <Onboard refresh={()=>{go('/',true);void refresh()}}/>;
+ if(!workspace&&['/','/sign-in','/register','/check-email','/forgot-password'].includes(route.pathname))return <div className="loading"><Brand/><p role="status">Opening your workspace…</p></div>;
+ const org=orgs?.find(item=>item.id===workspace?.organisationId);
+ if(!org||!workspace)return <div className="loading"><Brand/><h1>Workspace page unavailable</h1><p>The page does not exist or you do not have access.</p><a className="btn primary" href={orgs?.[0]?appPath(orgs[0].id,'Overview'):'/onboarding'}>Open your workspace</a><button className="btn outline" onClick={()=>void logout()}>Sign out</button>{logoutError&&<Alert message={logoutError}/>}</div>;
+ return <Dashboard key={org.id} user={user} org={org} organisations={orgs??[]} page={workspace.page} resourceId={workspace.resourceId} onOrganisationChange={updated=>setOrgs(items=>items?.map(item=>item.id===updated.id?updated:item)??null)} locationFilter={route.searchParams.get('location')||''} onLogout={()=>void logout()} logoutError={logoutError}/>;
 }
 export default App;

@@ -15,16 +15,20 @@ Observed through screenshots and reports: registration, email verification with 
 
 Unverified or incomplete: production migration state across environments; automated clean-install build; isolated test database; comprehensive tenant/branch authorisation; manager invitation UI; branch-specific timezone form; robust shift CRUD/publishing; reports; full timesheets, leave, swaps, payroll exports; true billing; API documentation; CI/deploy gates. Some screens remain placeholders. Do not claim any item as completed without a passing test or reproducible verification.
 
+## Verified implementation update
+
+See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope and [DEPLOYMENT.md](DEPLOYMENT.md) for deployment gates. Local Workers and D1 tests cover session persistence, tenant and branch isolation, migration smoke, browser history and mobile branch detail. Location lifecycle, branch manager grants, atomic staff assignment, private invitation links, membership suspension and branch-local draft shift entry are implemented. Hosted staging, production D1 history, live owner sign-in, and provider delivery are still separate gates.
+
 ## Priority P0 — Stabilise the product and deployments FIRST (blocking all features)
 - [ ] Inspect repo, dependencies, scripts, Worker/D1 bindings and current deployments; document exact current state and blockers. Preserve existing production D1, account and `David's Shop` test organisation.
-- [ ] Establish a repeatable local `npm ci`, `npm run typecheck`, `npm run build` and automated API/test command. Fix TypeScript, lint, formatting, runtime errors and unstable dependencies. No unverified commits.
+- [x] Establish a repeatable local `npm ci`, `npm run typecheck`, `npm run build` and automated API/test command. Fix TypeScript, lint, formatting, runtime errors and unstable dependencies. No unverified commits.
 - [ ] Add GitHub Actions CI: install, typecheck, build, unit/integration tests, migration smoke checks and failure gate. Do not push failing builds to production. Use protected branch / PR workflow where available and preserve a known-good deployment.
 - [ ] Introduce staging/preview Worker + **separate** staging D1 and variables/secrets; no test write to production. Validate `keep_vars`, `vars`, `secret list` and Cloudflare deploy behaviour without logging credential values.
-- [ ] Reproduce and permanently test previous defects: PBKDF2 Cloudflare iteration limit, JSX syntax failure, wildcard Hono organisation role resolution, collection-route 404, session incorrectly cleared on API error, refresh/back/forward issues, build assets missing `dist`.
-- [ ] Diagnose any current 403/404 and make session and workspace errors actionable. Never log secrets, password values or verification tokens.
+- [x] Reproduce and permanently test previous defects: PBKDF2 Cloudflare iteration limit, JSX syntax failure, wildcard Hono organisation role resolution, collection-route 404, session incorrectly cleared on API error, refresh/back/forward issues, build assets missing `dist`.
+- [x] Diagnose any current 403/404 and make session and workspace errors actionable. Never log secrets, password values or verification tokens.
 - [ ] Verify existing migration history, backups/restore, data integrity, rollback and forward-only migration strategy. No destructive or irreversible production migration without explicit approval.
 - [ ] Capture production and Worker runtime exceptions with request IDs; add health checks, structured logs, safe diagnostics, deploy smoke tests and alerting strategy.
-- [ ] Add a short `docs/IMPLEMENTATION_STATUS.md` with exact command outcomes, finished areas, failing areas, environment limitations, pending manual steps and deployed commit.
+- [x] Add a short `docs/IMPLEMENTATION_STATUS.md` with exact command outcomes, finished areas, failing areas, environment limitations, pending manual steps and deployed commit.
 
 **P0 acceptance:** automated CI green; app builds; existing owner can sign in, navigate, refresh and sign out; organisation-list and nested APIs return correct statuses; no regressions; preserved production data.
 
@@ -37,7 +41,7 @@ Unverified or incomplete: production migration state across environments; automa
 - [ ] Invitation lifecycle: invite/resend/revoke/accept, pending/expired, existing-user joins, account recovery; org owner/admin/manager/employee roles; owner transfer; scoped invitation permissions.
 - [ ] Branch manager assignment/revocation in UI and API, with explicit access to one or many locations. Owner/admin organisation-wide access; manager assigned branches only; employee own authorised records only. No role inheritance by URL or frontend.
 - [ ] One employee profile with many employee-location assignments; primary home location, optional secondary locations; inactive/archive, joining/leaving, employment fields, positions/departments, emergency/contact details only when lawful and necessary.
-- [ ] Prevent scheduling staff in branches to which they have not been assigned; prevent conflicting shifts across **all** branches. Location-level filtering must not inadvertently expose records outside permissions.
+- [x] Prevent scheduling staff in branches to which they have not been assigned; prevent conflicting shifts across **all** branches. Location-level filtering must not inadvertently expose records outside permissions.
 - [ ] End-to-end onboarding flow and employee invitation tests, full backend cross-tenant and cross-location matrices.
 
 **P1 acceptance:** two organisations and three branches with staff/manager permissions have been exercised in an isolated environment; unauthorised cross-org/cross-branch calls are refused; owner and authorised manager views work; browser refresh/deep links remain correct.
