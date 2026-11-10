@@ -55,7 +55,7 @@ function Onboard({refresh,name}:{refresh:()=>void;name:string}){
 }
 function Stat({title,value,note}:{title:string;value:string|number;note:string}){return <div className="stat-card"><div className="stat-label">{title}</div><strong>{value}</strong><span>{note}</span></div>}
 function Empty({icon,heading,description}:{icon:ReactNode;heading:string;description:string}){return <div className="empty">{icon}<h3>{heading}</h3><p>{description}</p></div>}
-function Dashboard({user,org,onLogout,onSwitch}:{user:User;org:Org;onLogout:()=>void;onSwitch:()=>void}){
+function Dashboard({user,org,organisations,onLogout,onSwitch}:{user:User;org:Org;organisations:Org[];onLogout:()=>void;onSwitch:(id:string)=>void}){
  const [page,setPage]=useState<Page>('Overview'),[error,setError]=useState(''),[success,setSuccess]=useState('');
  const [locations,setLocations]=useState<Location[]>([]),[employees,setEmployees]=useState<Employee[]>([]),[shifts,setShifts]=useState<Shift[]>([]);
  const [locationName,setLocationName]=useState(''),[employeeName,setEmployeeName]=useState(''),[zone,setZone]=useState(org.time_zone);
@@ -70,7 +70,7 @@ function Dashboard({user,org,onLogout,onSwitch}:{user:User;org:Org;onLogout:()=>
  useEffect(()=>{void reload()},[org.id]);
  async function action(fn:()=>Promise<any>,done:string){setBusy(true);setError('');setSuccess('');try{await fn();setSuccess(done);await reload()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
  const base='/organisations/'+org.id;
- return <div className="app"><aside className="sidebar"><Brand/><button className="workspace" onClick={onSwitch}><div className="workspace-icon">{org.name.charAt(0).toUpperCase()}</div><div><strong>{org.name}</strong><small>{org.role} · Switch organisation</small></div></button><div className="nav-label">WORKSPACE</div><nav>{nav.map(({name,icon:Icon})=><button key={name} className={'nav-item '+(page===name?'selected':'')} onClick={()=>{setPage(name);setError('');setSuccess('')}}><Icon size={19}/><span>{name}</span></button>)}</nav><div className="sidebar-bottom"><div className="sidebar-callout"><ShieldCheck size={23}/><strong>Your data, your organisation.</strong><span>All workspace requests are checked on the server.</span></div><button className="profile" onClick={onLogout}><span className="profile-icon">{user.name.charAt(0).toUpperCase()}</span><span><strong>{user.name}</strong><small>Sign out</small></span><LogOut size={18}/></button></div></aside>
+ return <div className="app"><aside className="sidebar"><Brand/><div className="workspace"><div className="workspace-icon">{org.name.charAt(0).toUpperCase()}</div><div><strong>{org.name}</strong><small>{org.role}</small></div></div>{organisations.length>1&&<select className="org-picker" aria-label="Switch organisation" value={org.id} onChange={e=>onSwitch(e.target.value)}>{organisations.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select>}<div className="nav-label">WORKSPACE</div><nav>{nav.map(({name,icon:Icon})=><button key={name} className={'nav-item '+(page===name?'selected':'')} onClick={()=>{setPage(name);setError('');setSuccess('')}}><Icon size={19}/><span>{name}</span></button>)}</nav><div className="sidebar-bottom"><div className="sidebar-callout"><ShieldCheck size={23}/><strong>Your data, your organisation.</strong><span>All workspace requests are checked on the server.</span></div><button className="profile" onClick={onLogout}><span className="profile-icon">{user.name.charAt(0).toUpperCase()}</span><span><strong>{user.name}</strong><small>Sign out</small></span><LogOut size={18}/></button></div></aside>
  <div className="main"><header className="topbar"><div className="breadcrumb"><span>{org.name}</span><b>/</b><strong>{page}</strong></div><div className="top-right"><span className="role-tag">{org.role}</span><span className="profile-icon">{user.name.charAt(0).toUpperCase()}</span></div></header>
  <main className="page"><div className="overline">SHIFTLEDGER / {page.toUpperCase()}</div><div className="page-heading"><div><h1>{page==='Overview'?'Your workforce, organised.':page}</h1><p>{page==='Overview'?'Your live organisation overview.':'Manage '+page.toLowerCase()+' for '+org.name+'.'}</p></div><button className="btn outline" onClick={()=>void reload()}><RefreshCcw size={17}/> Refresh</button></div>
  {error&&<Alert message={error}/ >}{success&&<Alert message={success} kind="success"/>}
@@ -89,6 +89,6 @@ function App(){
  if(loading)return <div className="loading"><Brand/><p>Connecting to your workspace…</p></div>;
  if(!user)return <>{error&&<div className="floating-error"><Alert message={error}/></div>}<Auth onSuccess={()=>void refresh()}/></>;
  if(!org)return <Onboard name={user.name} refresh={()=>void refresh()}/>;
- return <Dashboard key={org.id} user={user} org={org} onLogout={()=>void logout()} onSwitch={()=>{setOrg(null);setUser(null);void logout()}}/>;
+ return <Dashboard key={org.id} user={user} org={org} organisations={orgs} onLogout={()=>void logout()} onSwitch={id=>setOrg(orgs.find(o=>o.id===id)||org)}/>;
 }
 export default App;
