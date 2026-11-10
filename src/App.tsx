@@ -6,7 +6,7 @@ type Org = {id:string;name:string;slug:string;country_code:string;currency_code:
 type Location = {id:string;name:string;time_zone:string};
 type Employee = {id:string;display_name:string;employment_status:string};
 type Shift = {id:string;location_id:string;employee_id:string|null;starts_at_utc:string;ends_at_utc:string;status:string};
-type AuthMode='login'|'register'|'forgot'|'reset'|'pending'|'verified';
+type AuthMode='login'|'register'|'forgot'|'reset'|'pending';
 type Page='Overview'|'Schedule'|'Team'|'Timesheets'|'Leave'|'Shift swaps'|'Reports'|'Settings';
 const nav: {name:Page;icon:typeof LayoutDashboard}[]=[
  {name:'Overview',icon:LayoutDashboard},{name:'Schedule',icon:CalendarDays},{name:'Team',icon:UsersRound},{name:'Timesheets',icon:Clock3},{name:'Leave',icon:CalendarCheck2},{name:'Shift swaps',icon:ArrowLeftRight},{name:'Reports',icon:BarChart3},{name:'Settings',icon:Settings2}
@@ -25,15 +25,48 @@ const initialZone=Intl.DateTimeFormat().resolvedOptions().timeZone||'Europe/Lond
 function Alert({message,kind='error'}:{message:string;kind?:'error'|'success'}){return <div className={'alert '+kind} role="status">{kind==='error'?<AlertCircle size={19}/>:<CheckCircle2 size={19}/>}<span>{message}</span></div>}
 function Field({label,children}:{label:string;children:ReactNode}){return <label className="field"><span>{label}</span>{children}</label>}
 function Brand(){return <div className="brand"><div className="brand-mark"><CalendarCheck2 size={23}/></div><span>Shift<strong>Ledger</strong></span></div>}
+/**
+ * Verification must be visually distinct from sign-in. It only claims success
+ * after the API confirms token redemption. Never redirect automatically.
+ */
+function VerificationPage({token}:{token:string}){
+ const [state,setState]=useState<'checking'|'success'|'failed'>('checking');
+ const [error,setError]=useState('');
+ const started=useRef(false);
+ useEffect(()=>{
+  if(started.current)return;
+  started.current=true;
+  void post('/auth/verify',{token}).then(()=>{
+   setState('success');
+   window.history.replaceState({},'', '/email-verified');
+  }).catch((reason:Error)=>{
+   setError(reason.message);
+   setState('failed');
+   window.history.replaceState({},'', '/email-verification-failed');
+  });
+ },[token]);
+ return <main className="confirmation-page">
+  <header className="confirmation-header"><Brand/></header>
+  <div className="confirmation-content">
+   <section className="confirmation-card" aria-live="polite">
+    <div className="confirmation-icon">{state==='success'?<CheckCircle2 size={48}/>:state==='failed'?<AlertCircle size={48}/>:<RefreshCcw size={44}/>}</div>
+    <div className="overline">SHIFTLEDGER / ACCOUNT VERIFICATION</div>
+    <h1>{state==='checking'?'Verifying your email…':state==='success'?'Email verified!':'Verification unsuccessful'}</h1>
+    <p>{state==='checking'?'Checking your secure verification link.':state==='success'?'Your email address has been confirmed successfully. You can now sign in and set up your organisation.':error||'This verification link may have expired or already been used.'}</p>
+    {state==='success'&&<div className="confirmation-success"><CheckCircle2 size={21}/> Your account is ready for sign in.</div>}
+    {state!=='checking'&&<a className="btn primary confirmation-action" href="/">Continue to sign in <ArrowRight size={18}/></a>}
+    {state==='failed'&&<p className="confirmation-help">If your link has expired, return to sign in and request a new verification email.</p>}
+   </section>
+  </div>
+  <footer className="confirmation-footer">ShiftLedger · Secure account verification</footer>
+ </main>;
+}
 function Auth({onSuccess}:{onSuccess:()=>void}){
  const params=new URLSearchParams(window.location.search);
  const reset=params.get('reset');
  const [mode,setMode]=useState<AuthMode>(reset?'reset':'login');
  const [email,setEmail]=useState(''),[password,setPassword]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
- const verify=params.get('verify');
- const verificationStarted=useRef(false);
- useEffect(()=>{if(!verify||verificationStarted.current)return;verificationStarted.current=true;setMode('verified');setBusy(true);post('/auth/verify',{token:verify}).then(()=>{setMessage('Your email is verified. You can now sign in.')}).catch((e:Error)=>{setError(e.message)}).finally(()=>{setBusy(false);window.history.replaceState({},'',window.location.pathname)});},[verify]);
  async function submit(e:FormEvent){e.preventDefault();setError('');setMessage('');setBusy(true);
   try{
    if(mode==='register'){const r=await post('/auth/register',{email,password});setMessage(r.message);setMode('pending');setPassword('')}
@@ -44,13 +77,13 @@ function Auth({onSuccess}:{onSuccess:()=>void}){
   }catch(e){setError((e as Error).message)}finally{setBusy(false)}
  }
  return <div className="auth-layout"><div className="auth-art"><Brand/><div><span className="overline">THE WORKFORCE PLATFORM</span><h1>Run your team.<br/>Own your time.</h1><p>Scheduling, time tracking and team management. One secure home for your organisation.</p><div className="auth-points"><span>01 / Plan smarter</span><span>02 / Stay organised</span><span>03 / Grow together</span></div></div><small>SHIFTLEDGER — BUILT FOR REAL TEAMS</small></div>
- <div className="auth-side"><div className="auth-mobile-brand"><Brand/></div><div className="auth-card"><div className="overline">YOUR WORKSPACE STARTS HERE</div><h2>{mode==='login'?'Welcome back':mode==='register'?'Register your business':mode==='forgot'?'Reset your password':mode==='pending'?'Check your email':mode==='verified'?'Email verification':'Choose a new password'}</h2><p>{mode==='login'?'Sign in to manage your workforce.':mode==='register'?'Start with an email and password. We’ll set up your organisation after email verification.':mode==='forgot'?'We’ll email you a password-reset link.':mode==='pending'?'We sent a verification link to your email. Open it to activate your account.':mode==='verified'?'We are checking your verification link.':'Enter a new password for your account.'}</p>
+ <div className="auth-side"><div className="auth-mobile-brand"><Brand/></div><div className="auth-card"><div className="overline">YOUR WORKSPACE STARTS HERE</div><h2>{mode==='login'?'Welcome back':mode==='register'?'Register your business':mode==='forgot'?'Reset your password':mode==='pending'?'Check your email':'Choose a new password'}</h2><p>{mode==='login'?'Sign in to manage your workforce.':mode==='register'?'Start with an email and password. We’ll set up your organisation after email verification.':mode==='forgot'?'We’ll email you a password-reset link.':mode==='pending'?'We sent a verification link to your email. Open it to activate your account.':'Enter a new password for your account.'}</p>
  {error&&<Alert message={error}/ >}{message&&<Alert message={message} kind="success"/>}
- {mode==='verified'?<div className="verification-state">{busy?'Checking verification link…':message?'Verification completed.':'Verification could not be completed.'}<button className="btn primary full" type="button" onClick={()=>{setMode('login');setError('');setMessage('')}}>Continue to sign in <ArrowRight size={18}/></button></div>:<form onSubmit={submit} className="form-stack">
+ <form onSubmit={submit} className="form-stack">
  {mode!=='reset'&&<Field label={mode==='register'?'Work email address':'Email address'}><input type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)}/></Field>}
  {!['forgot','pending'].includes(mode)&&<Field label="Password"><input type="password" required minLength={mode==='login'?1:12} maxLength={128} autoComplete={mode==='login'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)}/></Field>}
- <button className="btn primary full" disabled={busy}>{busy?'Working…':mode==='login'?'Sign in':mode==='register'?'Create account':mode==='forgot'?'Send reset link':mode==='pending'?'Resend verification email':'Update password'} <ArrowRight size={18}/></button></form>}
- <div className="auth-links">{mode==='login'?<><button onClick={()=>{setMode('register');setError('');setMessage('')}}>Create an account</button><button onClick={()=>{setMode('forgot');setError('');setMessage('')}}>Forgot password?</button></>:mode==='verified'?null:<button onClick={()=>{setMode('login');setError('');setMessage('')}}>Back to sign in</button>}</div>
+ <button className="btn primary full" disabled={busy}>{busy?'Working…':mode==='login'?'Sign in':mode==='register'?'Create account':mode==='forgot'?'Send reset link':mode==='pending'?'Resend verification email':'Update password'} <ArrowRight size={18}/></button></form>
+ <div className="auth-links">{mode==='login'?<><button onClick={()=>{setMode('register');setError('');setMessage('')}}>Create an account</button><button onClick={()=>{setMode('forgot');setError('');setMessage('')}}>Forgot password?</button></>:<button onClick={()=>{setMode('login');setError('');setMessage('')}}>Back to sign in</button>}</div>
  </div><div className="auth-copyright">Secure accounts · Organisation-level data separation</div></div></div>
 }
 function Onboard({refresh}:{refresh:()=>void}){
@@ -87,10 +120,12 @@ function Dashboard({user,org,organisations,onLogout,onSwitch}:{user:User;org:Org
  <footer>© ShiftLedger · Real organisation data · No simulated statistics</footer></main></div></div>;
 }
 function App(){
+ const verificationToken=new URLSearchParams(window.location.search).get('verify');
  const [user,setUser]=useState<User|null>(null),[orgs,setOrgs]=useState<Org[]>([]),[org,setOrg]=useState<Org|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
  async function refresh(){try{const x=await api<{user:User}>('/auth/me');setUser(x.user);const y=await api<{organisations:Org[]}>('/organisations');setOrgs(y.organisations);setOrg(current=>y.organisations.find(o=>o.id===current?.id)||y.organisations[0]||null);setError('')}catch(e){setUser(null);setOrgs([]);setOrg(null);const msg=(e as Error).message;if(msg!=='Sign in required')setError(msg)}finally{setLoading(false)}}
  useEffect(()=>{void refresh()},[]);
  async function logout(){try{await post('/auth/logout',{})}finally{setUser(null);setOrg(null);setOrgs([])}}
+ if(verificationToken)return <VerificationPage token={verificationToken}/>;
  if(loading)return <div className="loading"><Brand/><p>Connecting to your workspace…</p></div>;
  if(!user)return <>{error&&<div className="floating-error"><Alert message={error}/></div>}<Auth onSuccess={()=>void refresh()}/></>;
  if(!org)return <Onboard refresh={()=>void refresh()}/>;
