@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { LayoutDashboard, CalendarDays, UsersRound, Clock3, CalendarCheck2, ArrowLeftRight, BarChart3, Settings2, Plus, LogOut, Building2, MapPin, ShieldCheck, ArrowRight, CheckCircle2, AlertCircle, RefreshCcw } from 'lucide-react';
 
 type User = {id:string;name:string;email:string};
@@ -6,7 +6,7 @@ type Org = {id:string;name:string;slug:string;country_code:string;currency_code:
 type Location = {id:string;name:string;time_zone:string};
 type Employee = {id:string;display_name:string;employment_status:string};
 type Shift = {id:string;location_id:string;employee_id:string|null;starts_at_utc:string;ends_at_utc:string;status:string};
-type AuthMode='login'|'register'|'forgot'|'reset';
+type AuthMode='login'|'register'|'forgot'|'reset'|'pending'|'verified';
 type Page='Overview'|'Schedule'|'Team'|'Timesheets'|'Leave'|'Shift swaps'|'Reports'|'Settings';
 const nav: {name:Page;icon:typeof LayoutDashboard}[]=[
  {name:'Overview',icon:LayoutDashboard},{name:'Schedule',icon:CalendarDays},{name:'Team',icon:UsersRound},{name:'Timesheets',icon:Clock3},{name:'Leave',icon:CalendarCheck2},{name:'Shift swaps',icon:ArrowLeftRight},{name:'Reports',icon:BarChart3},{name:'Settings',icon:Settings2}
@@ -32,23 +32,25 @@ function Auth({onSuccess}:{onSuccess:()=>void}){
  const [name,setName]=useState(''),[email,setEmail]=useState(''),[password,setPassword]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  const verify=params.get('verify');
- useEffect(()=>{if(!verify)return;let cancelled=false;post('/auth/verify',{token:verify}).then(()=>{if(!cancelled)setMessage('Email verified. Sign in to continue.')}).catch((e:Error)=>{if(!cancelled)setError(e.message)}).finally(()=>{window.history.replaceState({},'',window.location.pathname)});return()=>{cancelled=true}},[verify]);
+ const verificationStarted=useRef(false);
+ useEffect(()=>{if(!verify||verificationStarted.current)return;verificationStarted.current=true;setMode('verified');setBusy(true);post('/auth/verify',{token:verify}).then(()=>{setMessage('Your email is verified. You can now sign in.')}).catch((e:Error)=>{setError(e.message)}).finally(()=>{setBusy(false);window.history.replaceState({},'',window.location.pathname)});},[verify]);
  async function submit(e:FormEvent){e.preventDefault();setError('');setMessage('');setBusy(true);
   try{
-   if(mode==='register'){const r=await post('/auth/register',{name,email,password});setMessage(r.message);setMode('login');setPassword('')}
+   if(mode==='register'){const r=await post('/auth/register',{name,email,password});setMessage(r.message);setMode('pending');setPassword('')}
    else if(mode==='login'){await post('/auth/login',{email,password});onSuccess()}
+   else if(mode==='pending'){const r=await post('/auth/resend-verification',{email});setMessage(r.message)}
    else if(mode==='forgot'){const r=await post('/auth/forgot-password',{email});setMessage(r.message)}
    else{await post('/auth/reset-password',{token:reset,password});window.history.replaceState({},'',window.location.pathname);setMessage('Password updated. Sign in now.');setMode('login');setPassword('')}
   }catch(e){setError((e as Error).message)}finally{setBusy(false)}
  }
  return <div className="auth-layout"><div className="auth-art"><Brand/><div><span className="overline">THE WORKFORCE PLATFORM</span><h1>Run your team.<br/>Own your time.</h1><p>Scheduling, time tracking and team management. One secure home for your organisation.</p><div className="auth-points"><span>01 / Plan smarter</span><span>02 / Stay organised</span><span>03 / Grow together</span></div></div><small>SHIFTLEDGER — BUILT FOR REAL TEAMS</small></div>
- <div className="auth-side"><div className="auth-mobile-brand"><Brand/></div><div className="auth-card"><div className="overline">YOUR WORKSPACE STARTS HERE</div><h2>{mode==='login'?'Welcome back':mode==='register'?'Create your account':mode==='forgot'?'Reset your password':'Choose a new password'}</h2><p>{mode==='login'?'Sign in to manage your workforce.':mode==='register'?'Start with your work email. You’ll verify it before signing in.':mode==='forgot'?'We’ll email you a password-reset link.':'Enter a new password for your account.'}</p>
+ <div className="auth-side"><div className="auth-mobile-brand"><Brand/></div><div className="auth-card"><div className="overline">YOUR WORKSPACE STARTS HERE</div><h2>{mode==='login'?'Welcome back':mode==='register'?'Create your account':mode==='forgot'?'Reset your password':mode==='pending'?'Check your email':mode==='verified'?'Email verification':'Choose a new password'}</h2><p>{mode==='login'?'Sign in to manage your workforce.':mode==='register'?'Start with your work email. You’ll verify it before signing in.':mode==='forgot'?'We’ll email you a password-reset link.':mode==='pending'?'We sent a verification link to your email. Open it to activate your account.':mode==='verified'?'We are checking your verification link.':'Enter a new password for your account.'}</p>
  {error&&<Alert message={error}/ >}{message&&<Alert message={message} kind="success"/>}
- <form onSubmit={submit} className="form-stack">{mode==='register'&&<Field label="Full name"><input required autoComplete="name" value={name} onChange={e=>setName(e.target.value)} minLength={2} maxLength={80}/></Field>}
+ {mode==='verified'?<div className="verification-state">{busy?'Checking verification link…':message?'Verification completed.':'Verification could not be completed.'}<button className="btn primary full" type="button" onClick={()=>{setMode('login');setError('');setMessage('')}}>Continue to sign in <ArrowRight size={18}/></button></div>:<form onSubmit={submit} className="form-stack">{mode==='register'&&<Field label="Full name"><input required autoComplete="name" value={name} onChange={e=>setName(e.target.value)} minLength={2} maxLength={80}/></Field>}
  {mode!=='reset'&&<Field label="Email address"><input type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)}/></Field>}
- {mode!=='forgot'&&<Field label="Password"><input type="password" required minLength={mode==='login'?1:12} maxLength={128} autoComplete={mode==='login'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)}/></Field>}
- <button className="btn primary full" disabled={busy}>{busy?'Working…':mode==='login'?'Sign in':mode==='register'?'Create account':mode==='forgot'?'Send reset link':'Update password'} <ArrowRight size={18}/></button></form>
- <div className="auth-links">{mode==='login'?<><button onClick={()=>{setMode('register');setError('');setMessage('')}}>Create an account</button><button onClick={()=>{setMode('forgot');setError('');setMessage('')}}>Forgot password?</button></>:<button onClick={()=>{setMode('login');setError('');setMessage('')}}>Back to sign in</button>}</div>
+ {!['forgot','pending'].includes(mode)&&<Field label="Password"><input type="password" required minLength={mode==='login'?1:12} maxLength={128} autoComplete={mode==='login'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)}/></Field>}
+ <button className="btn primary full" disabled={busy}>{busy?'Working…':mode==='login'?'Sign in':mode==='register'?'Create account':mode==='forgot'?'Send reset link':mode==='pending'?'Resend verification email':'Update password'} <ArrowRight size={18}/></button></form>}
+ <div className="auth-links">{mode==='login'?<><button onClick={()=>{setMode('register');setError('');setMessage('')}}>Create an account</button><button onClick={()=>{setMode('forgot');setError('');setMessage('')}}>Forgot password?</button></>:mode==='verified'?null:<button onClick={()=>{setMode('login');setError('');setMessage('')}}>Back to sign in</button>}</div>
  </div><div className="auth-copyright">Secure accounts · Organisation-level data separation</div></div></div>
 }
 function Onboard({refresh,name}:{refresh:()=>void;name:string}){
