@@ -16,6 +16,7 @@ export type Shift = {
   status: 'draft' | 'published' | 'cancelled';
   revision: number;
   is_open?: number;
+  leave_conflict?: number;
   location_name: string;
   time_zone: string;
   employee_name: string | null;
@@ -78,11 +79,13 @@ export function Rota(props: Props) {
   const focusDate = view === 'month' ? (month.today.startsWith(date) ? month.today : days[0].date) : date;
   const period = view === 'month' ? month : view === 'day' ? day : week;
   const manage = org.role !== 'employee';
+  const coverage = manage && params.get('coverage') === '1';
   const base = '/organisations/' + org.id + '/shifts';
   const root = appPath(org.id, 'Schedule');
-  const href = (id?: string, targetView = view, targetDate = date, cursor?: string) => {
+  const href = (id?: string, targetView = view, targetDate = date, cursor?: string, onlyCoverage = coverage) => {
     const query = calendarQuery(targetView, targetDate);
     if (locationFilter) query.set('location', locationFilter);
+    if (onlyCoverage) query.set('coverage', '1');
     if (cursor) query.set('cursor', cursor);
     return root + (id ? '/' + id : '') + '?' + query;
   };
@@ -99,6 +102,7 @@ export function Rota(props: Props) {
   const editorSource = copyEndpoint || presetEndpoint;
   const query = new URLSearchParams({ from: days[0].from, to: days[days.length - 1].to });
   if (locationFilter) query.set('location', locationFilter);
+  if (coverage) query.set('coverage','1');
   if (cursor) query.set('cursor', cursor);
   const queryString = query.toString();
   const endpoint = shiftId ? base + '/' + shiftId : base + '?' + queryString;
@@ -143,7 +147,8 @@ export function Rota(props: Props) {
       onChanged={async () => setRecord((await api<{ shift: Shift }>(endpoint)).shift)} onDiscard={() => go(href(), true)}
       copyHref={href('new') + '&copy=' + encodeURIComponent(record.id)} openShifts={openShifts}/>
     {manage && openShifts && record.status !== 'draft' && <ShiftClaims key={endpoint + '/' + record.revision} endpoint={endpoint} onChanged={async () => setRecord((await api<{ shift: Shift }>(endpoint)).shift)}/>}
-    {manage && record.status === 'draft' && <ShiftEditor key={'editor/' + record.id + '/' + record.revision}
+    {manage && (record.status === 'draft' || (record.status === 'published' && record.employee_id &&
+      Date.parse(record.starts_at_utc) > Date.now())) && <ShiftEditor key={'editor/' + record.id + '/' + record.revision}
       {...props} endpoint={endpoint} shift={record} onSaved={async () => setRecord((await api<{ shift: Shift }>(endpoint)).shift)}/>}</>;
 
   const shifts = [...(result?.shifts ?? [])].reverse();
@@ -160,11 +165,14 @@ export function Rota(props: Props) {
         <a className="btn outline" href={href(undefined, view, period.previous)}>Previous {view}</a>
         <a className="btn outline" href={href(undefined, view, view === 'month' ? today.slice(0, 7) : today)}>{view === 'week' ? 'This week' : 'Today'}</a>
         <a className="btn outline" href={href(undefined, view, period.next)}>Next {view}</a>
+        {manage && <a className={'btn ' + (coverage ? 'primary' : 'outline')} aria-current={coverage ? 'true' : undefined}
+          href={href(undefined, view, date, undefined, !coverage)}>{coverage ? 'Show all shifts' : 'Needs cover'}</a>}
         {manage && view === 'week' && <a className="btn outline" href={href('bulk')}>Copy or publish shifts</a>}
         {manage && <a className="btn outline" href={href('templates')}>Shift templates</a>}
         {manage && <a className="btn primary" href={href('new')}>Create draft shift</a>}
       </div>
     </div>
+    {coverage && <p className="alert" role="status">Showing open vacancies and shifts that overlap approved leave.</p>}
     <div className={'rota-days rota-view-' + view}>
       {view === 'month' && <>
         {month.weekdays.map((label, index) => <div key={index} className="rota-weekday">{label}</div>)}
@@ -180,6 +188,7 @@ export function Rota(props: Props) {
           {!shown.length ? view !== 'month' && <p>No shifts</p> : <ul>{shown.map(shift => <li key={shift.id}>
             <a className={'rota-shift ' + shift.status + (isVacancy(shift) ? ' rota-vacancy' : '')} href={href(shift.id)}>
               <strong>{shiftName(shift)}</strong>
+              {Boolean(shift.leave_conflict) && <span className="rota-warning">Approved leave</span>}
               {view === 'month'
                 ? <span>{shift.starts_at_utc < day.from ? 'Continues' : formatShiftClock(shift.starts_at_utc, shift.time_zone, org.time_format)} · {shift.status}</span>
                 : <><span>{shift.location_name} · {shift.status}</span>
@@ -221,6 +230,7 @@ function ShiftDetails({ record, org, manage, endpoint, onChanged, onDiscard, cop
       <div><strong>{record.location_name}</strong> · {record.time_zone}</div>
       <div>{formatShiftTime(record.starts_at_utc, record.time_zone, org.time_format)} – {formatShiftTime(record.ends_at_utc, record.time_zone, org.time_format)}</div>
       <div>{record.unpaid_break_minutes} minutes unpaid break</div>
+      {Boolean(record.leave_conflict) && <p className="alert error" role="status">The assigned employee has approved leave during this shift.</p>}
       {manage && openShifts && record.status === 'draft' && !record.is_open && !record.employee_id &&
         <p className="form-hint">Assign an employee or mark this as an open shift before publishing.</p>}
       {manage && <div className="rota-controls">
@@ -278,6 +288,7 @@ function ShiftEditor({ locations, employees, assignments, locationFilter, openSh
   endpoint: string; shift?: Shift; template?: Shift; preset?: ShiftTemplate; initialDate?: string; onSaved: (id: string) => void | Promise<void>;
 }) {
   const initial = shift || template;
+  const published = shift?.status === 'published';
   const [locationId, setLocationId] = useState(initial?.location_id || preset?.location_id || locationFilter);
   const [employeeId, setEmployeeId] = useState(initial?.employee_id || '');
   const [isOpen, setIsOpen] = useState(Boolean(initial?.is_open));
@@ -316,7 +327,7 @@ function ShiftEditor({ locations, employees, assignments, locationFilter, openSh
     finally { setBusy(false); }
   }
   return <section className="panel rota-detail">
-    <div className="panel-title"><h2>{shift ? 'Edit draft shift' : template ? 'Duplicate shift as draft' : 'Create draft shift'}</h2></div>
+    <div className="panel-title"><h2>{published ? 'Edit published shift' : shift ? 'Edit draft shift' : template ? 'Duplicate shift as draft' : 'Create draft shift'}</h2></div>
     <form className="form-stack pad" onSubmit={save}>
       {error && <p className="alert error" role="alert">{error}</p>}
       {preset && <p className="form-hint">Using {preset.name}. Review the date and choose a staff assignment before publishing.</p>}
@@ -324,10 +335,11 @@ function ShiftEditor({ locations, employees, assignments, locationFilter, openSh
       <label className="field">Location<select required value={locationId} onChange={event => {
         setLocationId(event.target.value); setEmployeeId(''); setStartOccurrence('earlier'); setEndOccurrence('earlier');
       }}><option value="">Select a location</option>{locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
-      <label className="field">Employee<select value={employeeId} disabled={isOpen} onChange={event => setEmployeeId(event.target.value)}>
+      <label className="field">Employee<select value={employeeId} required={published} disabled={isOpen} onChange={event => setEmployeeId(event.target.value)}>
         <option value="">Unassigned</option>{eligible.map(employee => <option key={employee.id} value={employee.id}>{employee.display_name}</option>)}
       </select></label>
-      {openShifts && <label className="rota-checkbox"><input type="checkbox" checked={isOpen} onChange={event => {
+      {published && <p className="form-hint">Saving updates the published schedule immediately.</p>}
+      {openShifts && !published && <label className="rota-checkbox"><input type="checkbox" checked={isOpen} onChange={event => {
         setIsOpen(event.target.checked);
         if (event.target.checked) setEmployeeId('');
       }}/> Mark as an open shift</label>}
@@ -347,7 +359,7 @@ function ShiftEditor({ locations, employees, assignments, locationFilter, openSh
         <input type="number" min={1} max={12} required value={occurrences} onChange={event => setOccurrences(Number(event.target.value))}/>
         <small className="form-hint">Includes this shift. Repeats use the same local times each week.</small>
       </label>}
-      <button className="btn primary" disabled={busy || !zone}>{shift ? 'Save draft' : occurrences > 1
+      <button className="btn primary" disabled={busy || !zone}>{published ? 'Save published changes' : shift ? 'Save draft' : occurrences > 1
         ? 'Create ' + occurrences + ' drafts' : template ? 'Create duplicate draft' : 'Create draft'}</button>
     </form>
   </section>;

@@ -230,3 +230,48 @@ test('weekly repeats, copy-week and bulk publication are usable from Schedule', 
   await page.getByRole('link', { name: 'View rota' }).click();
   await expect(page.getByRole('link', { name: /Shared employee.*published/ })).toBeVisible();
 });
+
+test('coverage filter flags approved leave and upcoming published shifts can be reassigned', async ({ page, request, baseURL }) => {
+  const date = '2046-05-15';
+  const data = { locationId:'south', employeeId:'shared', startsAt:date + 'T13:00:00Z', endsAt:date + 'T21:00:00Z' };
+  const created = await request.post(path,{...owner,data});
+  expect(created.status()).toBe(201);
+  const { shift } = await created.json();
+  const detail = path + '/' + shift.id;
+  expect((await request.post(detail + '/publish',{...owner,data:{revision:1}})).status()).toBe(200);
+
+  const leavePath = '/api/v1/organisations/shop/leave';
+  const leave = await request.post(leavePath,{...owner,data:{ locationId:'south', employeeId:'shared',
+    firstDate:date, lastDate:date, kind:'holiday' }});
+  expect(leave.status()).toBe(201);
+  expect((await request.post(leavePath + '/' + (await leave.json()).request.id + '/approve',{
+    ...owner,data:{acknowledgeShiftConflict:true}
+  })).status()).toBe(200);
+  const vacancy = await request.post(path,{...owner,data:{...data,employeeId:null,isOpen:true}});
+  expect(vacancy.status()).toBe(201);
+  const vacancyId = (await vacancy.json()).shift.id;
+  expect((await request.post(path + '/' + vacancyId + '/publish',{...owner,data:{revision:1}})).status()).toBe(200);
+  const coverage = path + '?coverage=1&location=south&from=' + date + 'T00:00:00Z&to=2046-05-16T00:00:00Z';
+  expect((await request.get(coverage,employee)).status()).toBe(403);
+  expect((await (await request.get(coverage,manager)).json()).shifts).toEqual([]);
+  expect((await (await request.get(detail,employee)).json()).shift.leave_conflict).toBe(0);
+  expect((await request.patch(detail,{...owner,data:{...data,isOpen:true,employeeId:null,revision:2}})).status()).toBe(409);
+  expect((await request.patch(detail,{...owner,data:{...data,revision:2}})).status()).toBe(409);
+
+  await page.context().addCookies([{name:'sl_session',value:fixtureSessions[ownerEmail],url:baseURL!}]);
+  await page.goto('/app/shop/schedule?view=day&date=' + date + '&location=south');
+  await page.getByRole('link',{name:'Needs cover',exact:true}).click();
+  await expect(page).toHaveURL(/coverage=1$/);
+  await page.getByRole('link',{name:/Shared employee.*Approved leave/}).click();
+  await expect(page.getByText('The assigned employee has approved leave during this shift.')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Edit published shift'})).toBeVisible();
+  await page.getByRole('combobox',{name:'Employee',exact:true}).selectOption('cover-staff');
+  await page.getByRole('button',{name:'Save published changes'}).click();
+  await expect(page.getByRole('heading',{name:'Cover Employee',exact:true})).toBeVisible();
+  await expect(page.getByText('The assigned employee has approved leave during this shift.')).toHaveCount(0);
+  expect((await request.get(detail,employee)).status()).toBe(404);
+  expect((await (await request.get(detail,session(coverEmail))).json()).shift).toMatchObject({status:'published',revision:3});
+  await page.getByRole('link',{name:'Back to rota'}).click();
+  await expect(page.locator('.rota-shift')).toHaveCount(1);
+  await expect(page.getByRole('link',{name:/Open shift.*published/})).toBeVisible();
+});

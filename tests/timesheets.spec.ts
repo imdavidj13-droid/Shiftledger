@@ -99,3 +99,19 @@ test('manager records and corrects missed punches and reopens approved timesheet
   await expect(page.getByRole('link', { name:/Shared employee.*Approved/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
+
+test('a linked early clock-in protects the published rota from revisions', async ({ request }) => {
+  const now = Date.now();
+  const data = { locationId:'south', employeeId:'cover-staff', startsAt:new Date(now+3600_000).toISOString(),
+    endsAt:new Date(now+3*3600_000).toISOString() };
+  const created = await request.post(root + '/shifts',{...owner,data});
+  expect(created.status()).toBe(201);
+  const { shift } = await created.json();
+  const published = root + '/shifts/' + shift.id;
+  expect((await request.post(published + '/publish',{...owner,data:{revision:1}})).status()).toBe(200);
+  const start = await request.post(path + '/clock-in',{...cover,data:{locationId:'south',shiftId:shift.id}});
+  expect(start.status()).toBe(201);
+  const { entry } = await start.json();
+  expect((await request.patch(published,{...owner,data:{...data,revision:2,breakMinutes:15}})).status()).toBe(409);
+  expect((await request.post(path + '/' + entry.id + '/clock-out',cover)).status()).toBe(200);
+});

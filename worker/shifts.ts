@@ -3,9 +3,11 @@ import { audit, body, fail, isoNow, orgAdmin, orgRoute, safeStr, type ApiContext
 import { activeEmployeeMember, activeLocation, canManage, locationPermission, noApprovedLeave, noOverlap, schemaHasTable, staffEligible, utc } from './workforce';
 
 const path = orgRoute + '/shifts';
-const selectShift = (openShifts: boolean) => `SELECT s.id,s.location_id,s.employee_id,s.starts_at_utc,s.ends_at_utc,
+const leaveConflict = `s.status IN ('draft','published') AND s.employee_id IS NOT NULL
+  AND NOT ${noApprovedLeave('s.organisation_id','s.employee_id','s.starts_at_utc','s.ends_at_utc')}`;
+const selectShift = (openShifts: boolean, leaveEnabled = false) => `SELECT s.id,s.location_id,s.employee_id,s.starts_at_utc,s.ends_at_utc,
   s.unpaid_break_minutes,s.status,s.revision,${openShifts ? 's.is_open' : '0 AS is_open'},l.name AS location_name,l.time_zone,
-  e.display_name AS employee_name
+  e.display_name AS employee_name,${leaveEnabled ? '(' + leaveConflict + ')' : '0'} AS leave_conflict
   FROM shifts s JOIN locations l ON l.organisation_id=s.organisation_id AND l.id=s.location_id
   LEFT JOIN employees e ON e.organisation_id=s.organisation_id AND e.id=s.employee_id`;
 type Shift = {
@@ -30,9 +32,9 @@ function scope(c: ApiContext, openShifts: boolean) {
     bindings: openShifts ? [c.get('userId'), isoNow()] : [c.get('userId')]
   };
 }
-async function findShift(c: ApiContext, id: string, openShifts: boolean) {
+async function findShift(c: ApiContext, id: string, openShifts: boolean, leaveEnabled = false) {
   const access = scope(c, openShifts);
-  return c.env.DB.prepare(selectShift(openShifts) + ' WHERE s.organisation_id=? AND s.id=?' + access.sql)
+  return c.env.DB.prepare(selectShift(openShifts,leaveEnabled) + ' WHERE s.organisation_id=? AND s.id=?' + access.sql)
     .bind(c.get('organisationId'),id,...access.bindings).first<Shift>();
 }
 
@@ -41,7 +43,7 @@ const writeGuard = (leaveEnabled: boolean) => `${activeLocation('?2','?3')} AND 
   AND (?4 IS NULL OR (${staffEligible('?2','?3','?4')} AND ${noOverlap('?2','?1','?4','?5','?6')}
     ${leaveEnabled ? 'AND ' + noApprovedLeave('?2','?4','?5','?6') : ''}))`;
 
-async function saveDraft(c: ApiContext, openShifts: boolean, previous?: Shift) {
+async function saveShift(c: ApiContext, openShifts: boolean, previous?: Shift) {
   const input = await body(c);
   const location = safeStr(input?.locationId,64), employee = safeStr(input?.employeeId,64) || null;
   const open = input?.isOpen ?? Boolean(previous?.is_open);
@@ -52,7 +54,14 @@ async function saveDraft(c: ApiContext, openShifts: boolean, previous?: Shift) {
   if (!location || !start || !end || start >= end || !Number.isInteger(breaks) || breaks < 0 || breaks > 1440 ||
       (previous && (!Number.isInteger(version) || version < 1))) return fail(c,'Enter a location, valid UTC start and end times, and unpaid break minutes.',422);
   if (breaks * 60000 >= Date.parse(end) - Date.parse(start)) return fail(c,'Break must be shorter than the shift.',422);
-  if (previous && (previous.status !== 'draft' || previous.revision !== version)) return fail(c,'This shift changed or is no longer a draft. Refresh and try again.',409);
+  if (previous && (previous.status === 'cancelled' || previous.revision !== version)) {
+    return fail(c,'This shift changed or was cancelled. Refresh and try again.',409);
+  }
+  const published = previous?.status === 'published';
+  const now = isoNow();
+  if (published && (previous.is_open || !previous.employee_id || !employee || open || previous.starts_at_utc <= now || start <= now)) {
+    return fail(c,'Only upcoming published shifts with an employee assignment can be edited.',409);
+  }
   const org = c.get('organisationId'), user = c.get('userId'), id = previous?.id || crypto.randomUUID();
   const db = c.env.DB;
   if (!await db.prepare('SELECT 1 FROM locations WHERE organisation_id=? AND id=? AND archived_at IS NULL').bind(org,location).first()) {
@@ -64,21 +73,28 @@ async function saveDraft(c: ApiContext, openShifts: boolean, previous?: Shift) {
   if (employee && !await db.prepare('SELECT 1 WHERE ' + staffEligible('?','?','?')).bind(org,location,employee).first()) {
     return fail(c,'Assign an active employee to the selected location before scheduling them',422);
   }
-  const guard = writeGuard(Boolean(employee) && await schemaHasTable(db,'leave_requests'));
+  const [leaveEnabled,timekeeping] = await Promise.all([
+    Boolean(employee) && schemaHasTable(db,'leave_requests'), published && schemaHasTable(db,'time_entries')
+  ]);
+  const guard = writeGuard(leaveEnabled);
+  const publishedGuard = published ? `AND starts_at_utc>?10 AND employee_id IS NOT NULL
+    ${timekeeping ? 'AND NOT EXISTS (SELECT 1 FROM time_entries t WHERE t.organisation_id=?2 AND t.shift_id=?1)' : ''}` : '';
   const values = [id,org,location,employee,start,end,breaks,user];
   const change = previous
     ? db.prepare(`UPDATE shifts SET location_id=?3,employee_id=?4,starts_at_utc=?5,ends_at_utc=?6,
-        unpaid_break_minutes=?7,updated_at=?10,revision=revision+1${openShifts ? ',is_open=?11' : ''}
-        WHERE id=?1 AND organisation_id=?2 AND revision=?9 AND status='draft' AND ${guard}
-        AND ${locationPermission('?2','shifts.location_id','?8')}`).bind(...values,version,isoNow(),...(openShifts ? [Number(open)] : []))
+        unpaid_break_minutes=?7,updated_at=?10,revision=revision+1${openShifts ? ',is_open=?12' : ''}
+        WHERE id=?1 AND organisation_id=?2 AND revision=?9 AND status=?11 AND ${guard} ${publishedGuard}
+        AND ${locationPermission('?2','shifts.location_id','?8')}`).bind(...values,version,now,previous.status,...(openShifts ? [Number(open)] : []))
     : db.prepare(`INSERT INTO shifts(id,organisation_id,location_id,employee_id,starts_at_utc,ends_at_utc,unpaid_break_minutes${openShifts ? ',is_open' : ''})
         SELECT ?1,?2,?3,?4,?5,?6,?7${openShifts ? ',?9' : ''} WHERE ${guard}`)
         .bind(...values,...(openShifts ? [Number(open)] : []));
-  const results = await db.batch([change,audit(c,previous?'update':'create','shift',id,{
+  const results = await db.batch([change,audit(c,published?'revise':previous?'update':'create','shift',id,{
+    previous: published ? {locationId:previous.location_id,employeeId:previous.employee_id,
+      startsAt:previous.starts_at_utc,endsAt:previous.ends_at_utc,breakMinutes:previous.unpaid_break_minutes} : undefined,
     revision: previous ? previous.revision + 1 : 1, locationId: location, employeeId: employee, startsAt: start, endsAt: end, breakMinutes: breaks, isOpen: open
   },true)]);
-  if (!results[0].meta.changes) return fail(c,'The employee has an overlapping shift or approved leave, or the shift, location or assignment has changed.',409);
-  return c.json({shift:{id,status:'draft',revision:previous?previous.revision+1:1}},previous?200:201);
+  if (!results[0].meta.changes) return fail(c,'The employee has a shift or leave conflict, the assignment changed, or timekeeping has already started.',409);
+  return c.json({shift:{id,status:previous?.status || 'draft',revision:previous?previous.revision+1:1}},previous?200:201);
 }
 
 function claimEligible(shift: string, employee: string, now: string, leaveEnabled: boolean) {
@@ -155,18 +171,28 @@ function registerClaims(app: Hono<Env>) {
 export function registerShifts(app: Hono<Env>) {
   registerClaims(app);
   app.get(path, async c => {
-    const openShifts = await openShiftSchema(c);
+    const managing = canManage(c);
+    const [openShifts,leaveEnabled] = await Promise.all([
+      openShiftSchema(c), managing && schemaHasTable(c.env.DB,'leave_requests')
+    ]);
     const access = scope(c, openShifts), location = c.req.query('location');
-    const { from: fromValue, to: toValue, cursor, status } = c.req.query();
+    const { from: fromValue, to: toValue, cursor, status, coverage } = c.req.query();
+    if (coverage && !managing) return fail(c,'Not permitted.',403);
+    if (coverage && coverage !== '1') return fail(c,'Invalid coverage filter.',422);
     if (status && !['draft','published','cancelled'].includes(status)) return fail(c,'Invalid shift status.',422);
     const from = utc(fromValue), to = utc(toValue);
     if ((fromValue || toValue) && (!from || !to || from >= to || Date.parse(to) - Date.parse(from) > 32*86400000)) {
       return fail(c,'Provide a valid time range up to 32 days.',422);
     }
     const args: string[] = [c.get('organisationId'), ...access.bindings];
-    let sql = selectShift(openShifts) + ' WHERE s.organisation_id=?' + access.sql;
+    let sql = selectShift(openShifts,leaveEnabled) + ' WHERE s.organisation_id=?' + access.sql;
     if (location) { sql += ' AND s.location_id=?'; args.push(location); }
     if (status) { sql += ' AND s.status=?'; args.push(status); }
+    if (coverage) {
+      const vacancy = openShifts ? "(s.status='published' AND s.is_open=1)" : '0';
+      sql += ` AND s.ends_at_utc>? AND (${vacancy} OR (${leaveEnabled ? leaveConflict : '0'}))`;
+      args.push(isoNow());
+    }
     if (from && to) { sql += ' AND s.starts_at_utc<? AND s.ends_at_utc>?'; args.push(to,from); }
     if (cursor) {
       const [instant,id,extra] = cursor.split('|');
@@ -178,16 +204,18 @@ export function registerShifts(app: Hono<Env>) {
     return c.json({shifts,openShifts,nextCursor:rows.length>200&&last?last.starts_at_utc+'|'+last.id:null});
   });
   app.get(path+'/:shiftId',async c=>{
-    const openShifts = await openShiftSchema(c);
-    const shift = await findShift(c,c.req.param('shiftId') || '',openShifts);
+    const [openShifts,leaveEnabled] = await Promise.all([
+      openShiftSchema(c), canManage(c) && schemaHasTable(c.env.DB,'leave_requests')
+    ]);
+    const shift = await findShift(c,c.req.param('shiftId') || '',openShifts,leaveEnabled);
     return shift ? c.json({shift,openShifts}) : fail(c,'Shift not found',404);
   });
-  app.post(path, async c => canManage(c) ? saveDraft(c,await openShiftSchema(c)) : fail(c,'Not permitted',403));
+  app.post(path, async c => canManage(c) ? saveShift(c,await openShiftSchema(c)) : fail(c,'Not permitted',403));
   app.patch(path+'/:shiftId',async c=>{
     if (!canManage(c)) return fail(c,'Not permitted',403);
     const openShifts = await openShiftSchema(c);
     const shift = await findShift(c,c.req.param('shiftId') || '',openShifts);
-    return shift ? saveDraft(c,openShifts,shift) : fail(c,'Shift not found',404);
+    return shift ? saveShift(c,openShifts,shift) : fail(c,'Shift not found',404);
   });
   app.post(path+'/:shiftId/:operation{publish|cancel|discard}', async c => {
     if (!canManage(c)) return fail(c,'Not permitted',403);

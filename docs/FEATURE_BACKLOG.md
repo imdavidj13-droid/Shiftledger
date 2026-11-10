@@ -115,7 +115,8 @@ See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope an
 - [x] Reusable branch-local shift templates with creation, editing, archiving and prefilled draft creation, including overnight hours.
 - [ ] Activate templates with production migration 0011. Finish editable recurring series, multi-shift templates, bulk edits, skill/position requirements and shift notes.
 - [x] Permissioned single-shift publishing and cancellation with revisions, audit events and employee visibility.
-- [ ] Review state, updates to published shifts and idempotent staff notifications.
+- [x] Review and revise upcoming assigned published shifts with optimistic revision checks, cross-branch access checks, conflict checks and a timekeeping lock.
+- [ ] Finish formal review state, changes to published vacancies and idempotent staff notifications.
 - [ ] Conflict engine: overlapping shifts across locations, unavailability, approved leave, breaks, min/max hours, overtime warning, optional rest requirements, working-time rules as *configurable warnings* until jurisdiction-reviewed.
 - [x] Implement and locally test explicitly marked open shifts, one pending claim per vacancy and branch-scoped approval or decline.
 - [ ] Enable open shifts in production after approval of migration 0006. Finish eligibility rules for availability and positions, claim notifications and configurable auto-approval.
@@ -132,7 +133,8 @@ See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope an
 - [ ] Activate leave with production migration 0007. Finish availability and exceptions, configurable leave types, balances/accrual and holiday calendars.
 - [x] Employee swap requests and recipient consent through the API. Management can record agreed swaps, review, approve, decline or cancel. D1 verifies both branches and reassigns both shifts atomically.
 - [ ] Activate production swaps with migration 0009. Add broader shift offers, notifications and coverage management.
-- [ ] Absence alerts and staffing gaps with appropriate privacy boundaries.
+- [x] Schedule coverage filter and leave warning badges identify vacancies and shifts affected by approved leave. Managers can reassign an upcoming published shift from its detail page.
+- [ ] Finish coverage offers, staffing targets and absence notifications.
 
 **P3 acceptance:** clock -> edit -> approve -> export with audit trail; leave and swaps affect schedule conflict checks; manager cannot approve unauthorised employees.
 
