@@ -127,7 +127,7 @@ function Auth({onSuccess}:{onSuccess:()=>void}){
    else if(mode==='login'){
     await post('/auth/login',{email,password});
     const next=new URLSearchParams(window.location.search).get('next');
-    if(next&&/^\/app\/[a-zA-Z0-9_-]+\/[a-z-]+$/.test(next))window.history.replaceState({},'',next);
+    if(next&&/^\/app\/[a-zA-Z0-9_-]+\/[a-z-]+(?:\?location=[a-zA-Z0-9_-]+)?$/.test(next))window.history.replaceState({},'',next);
     onSuccess();
    }
    else if(mode==='pending'){const r=await post('/auth/resend-verification',{email});setMessage(r.message)}
@@ -280,7 +280,7 @@ function App(){
  const verificationToken=new URLSearchParams(window.location.search).get('verify');
  const [user,setUser]=useState<User|null>(null),[orgs,setOrgs]=useState<Org[]>([]),[org,setOrg]=useState<Org|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
  async function refresh(){try{const x=await api<{user:User}>('/auth/me');setUser(x.user);const y=await api<{organisations:Org[]}>('/organisations');setOrgs(y.organisations);setOrg(current=>y.organisations.find(o=>o.id===pathOrganisation())||y.organisations.find(o=>o.id===current?.id)||y.organisations[0]||null);setError('')}catch(e){setUser(null);setOrgs([]);setOrg(null);const msg=(e as Error).message;if(msg==='Sign in required'){
-   const requested=window.location.pathname;
+   const requested=window.location.pathname+window.location.search;
    if(requested.startsWith('/app/'))window.history.replaceState({},'', '/sign-in?next='+encodeURIComponent(requested));
   }else setError(msg)}finally{setLoading(false)}}
  useEffect(()=>{void refresh()},[]);
