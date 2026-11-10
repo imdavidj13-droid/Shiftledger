@@ -288,10 +288,34 @@ function Dashboard({user,org,organisations,onLogout,onSwitch}:{user:User;org:Org
 function App(){
  const verificationToken=new URLSearchParams(window.location.search).get('verify');
  const [user,setUser]=useState<User|null>(null),[orgs,setOrgs]=useState<Org[]>([]),[org,setOrg]=useState<Org|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
- async function refresh(){try{const x=await api<{user:User}>('/auth/me');setUser(x.user);const y=await api<{organisations:Org[]}>('/organisations');setOrgs(y.organisations);setOrg(current=>y.organisations.find(o=>o.id===pathOrganisation())||y.organisations.find(o=>o.id===current?.id)||y.organisations[0]||null);setError('')}catch(e){setUser(null);setOrgs([]);setOrg(null);const msg=(e as Error).message;if(msg==='Sign in required'){
-   const requested=window.location.pathname+window.location.search;
-   if(requested.startsWith('/app/'))window.history.replaceState({},'', '/sign-in?next='+encodeURIComponent(requested));
-  }else setError(msg)}finally{setLoading(false)}}
+ async function refresh(){
+  try {
+   const account=await api<{user:User}>('/auth/me');
+   setUser(account.user);
+  }catch(e){
+   const msg=(e as Error).message;
+   if(msg==='Sign in required'){
+    setUser(null);setOrgs([]);setOrg(null);setError('');
+    const requested=window.location.pathname+window.location.search;
+    if(requested.startsWith('/app/'))window.history.replaceState({},'', '/sign-in?next='+encodeURIComponent(requested));
+   }else{
+    setError('Could not check your session. Please refresh the page.');
+   }
+   setLoading(false);
+   return;
+  }
+  try {
+   const result=await api<{organisations:Org[]}>('/organisations');
+   setOrgs(result.organisations);
+   setOrg(current=>result.organisations.find(o=>o.id===pathOrganisation())||result.organisations.find(o=>o.id===current?.id)||result.organisations[0]||null);
+   setError('');
+  }catch(e){
+   // A workspace-list failure must never discard an already authenticated user.
+   setError('Unable to load your organisations: '+(e as Error).message);
+  }finally{
+   setLoading(false);
+  }
+ }
  useEffect(()=>{void refresh()},[]);
  useEffect(()=>{
   const syncOrganisation=()=>{
