@@ -20,7 +20,10 @@ Updated 10 November 2026. The master roadmap remains [FEATURE_BACKLOG.md](FEATUR
 - [Timesheets (d008897)](https://github.com/imdavidj13-droid/Shiftledger/commit/d008897122bce237cec22b2633eef7e6e23f49f7) passed [GitHub Actions](https://github.com/imdavidj13-droid/Shiftledger/actions/runs/42787037581).
 - Timekeeping passed `npm run verify` (37 tests) and the Wrangler production dry-run. Migration `0008_timekeeping.sql` is additive and awaits production approval. Pay periods, approved-record reopening and rounding rules remain open.
 - Shift swaps have management list, detail and review screens. Staff API offers require the second employee to consent. Managers can record consent already given by both employees. Approval rechecks access to both branches, shift revisions, employee assignments, overlaps and approved leave before updating both shifts in one D1 transaction.
+- [Shift swaps (590c5c8)](https://github.com/imdavidj13-droid/Shiftledger/commit/590c5c8d125722d084fe2c397f2c0d1f4c95c48a) reached the live site with matching assets. [GitHub Actions run](https://github.com/imdavidj13-droid/Shiftledger/actions/runs/42788065066).
 - Swap validation passed `npm run verify` (39 tests) and Wrangler production dry-run. Migration `0009_shift_swaps.sql` awaits production approval.
+- The Team directory links to permanent staff profiles. Owners and administrators can edit employee names, employment status, department and position labels, and a primary branch. Managers see only profiles and branch assignments they manage. Upcoming shifts and open time entries block inactivation.
+- Staff profiles passed `npm run verify` (41 tests) and Wrangler production dry-run. Migration `0010_staff_profiles.sql` awaits production approval. Core name and employment status edits work before that migration. Reusable department and position catalogues and the five-step business setup remain open.
 - Leave balances, availability/position eligibility, notification delivery, editable recurring series, reusable templates and remaining P0–P3 release gates are still open. Hosted staging is outside the current deployment policy.
 
 ## Verified in local Workers and D1

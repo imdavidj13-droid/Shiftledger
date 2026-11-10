@@ -4,6 +4,7 @@ import { registerShiftBatch } from './shift-batch';
 import { registerLeave } from './leave';
 import { registerTimekeeping } from './timekeeping';
 import { registerSwaps } from './swaps';
+import { registerStaff } from './staff';
 import { registerInvitations } from './invitations';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
@@ -509,6 +510,7 @@ registerShiftBatch(app);
 registerLeave(app);
 registerTimekeeping(app);
 registerSwaps(app);
+registerStaff(app);
 registerInvitations(app, currentUser);
 app.onError((_error,c)=>{
   console.error(JSON.stringify({event:'unexpected_api_error',requestId:c.get('requestId'),method:c.req.method}));

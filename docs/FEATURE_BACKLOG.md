@@ -97,7 +97,8 @@ See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope an
 - [ ] Add first-class location list/detail/create/edit/archive/restore and branch-specific settings, opening hours, working patterns and default scheduling controls. One organisation may have many branches without new accounts or charges per branch.
 - [ ] Invitation lifecycle: invite/resend/revoke/accept, pending/expired, existing-user joins, account recovery; org owner/admin/manager/employee roles; owner transfer; scoped invitation permissions.
 - [x] Branch manager assignment/revocation in UI and API, with explicit access to one or many locations. Owner/admin organisation-wide access; manager assigned branches only; employee own authorised records only. No role inheritance by URL or frontend.
-- [ ] One employee profile with many employee-location assignments; primary home location, optional secondary locations; inactive/archive, joining/leaving, employment fields, positions/departments, emergency/contact details only when lawful and necessary.
+- [x] Permanent staff profile with one shared employee identity, multiple assignments, active/inactive status, a primary branch and editable department and position labels.
+- [ ] Activate staff metadata with migration 0010. Add reusable department and position catalogues, onboarding integration, joining/leaving details and remaining employment fields.
 - [x] Prevent scheduling staff in branches to which they have not been assigned; prevent conflicting shifts across **all** branches. Location-level filtering must not inadvertently expose records outside permissions.
 - [x] End-to-end onboarding and invitation acceptance tests, with API checks for tenant, role and location boundaries in the implemented routes.
 

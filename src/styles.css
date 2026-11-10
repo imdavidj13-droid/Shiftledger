@@ -142,3 +142,4 @@ a:focus-visible{outline:3px solid #10261f;outline-offset:3px}
 .workforce-record:hover{background:var(--tint)}
 .workforce-note{white-space:pre-wrap;overflow-wrap:anywhere}
 .field textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--dark);font:inherit;resize:vertical}
+.staff-profile-link{font-weight:800;color:var(--green);text-decoration:underline;text-underline-offset:3px}
