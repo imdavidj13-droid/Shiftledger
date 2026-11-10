@@ -21,3 +21,5 @@
 .confirmation-action{width:100%;text-decoration:none}
 .confirmation-card .confirmation-help{margin:19px auto 0;font-size:12px}
 .confirmation-footer{text-align:center;background:#075641;color:#fff;font-size:12px;font-weight:700;padding:17px}
+
+.confirmation-preview-label{background:#FFE1A8;color:#10261F;border:2px solid #10261F;border-radius:5px;padding:10px 12px;margin-bottom:25px;font-size:11px;font-weight:800;letter-spacing:1px;text-align:center}
