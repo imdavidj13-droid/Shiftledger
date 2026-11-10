@@ -24,7 +24,7 @@ The Worker serves `dist/index.html` as SPA fallback for client routes. For users
 
 Platform > Organisations > Locations > Employees and shifts.
 
-- One business = one organisation with one owner and one prospective subscription.
+- One business = one organisation with one owner and one prospective subscription. Adding a branch must never create another subscription.
 - A business can have zero, one or many locations; each location has its own IANA time zone.
 - One organisation contains shared employee identities. Employee-location assignment is many-to-many, so a person working at two sites is **not** entered twice.
 - Owners and org admins see organisation-wide data. Managers may have multiple assigned locations.
@@ -66,8 +66,8 @@ Not implemented yet: inviting users as organisation members, granting manager ro
 ## Verification checklist
 1. Build and deploy with no TypeScript errors.
 2. Run migration 0003, confirm D1 schema updated, and verify existing accounts survive.
-3. Create organisation with first location via three-step onboarding.
-4. From Settings, add a second location and confirm both appear in the directory.
+3. Create organisation with multiple initial locations via three-step onboarding. Confirm all branches belong to the same organisation and are not separate accounts.
+4. From Settings, add another location and confirm all branches appear in the directory.
 5. Create an employee once and assign that employee to **both** locations in the Team screen.
 6. Create shifts for that employee at each location.
 7. Refresh a module deep link and confirm the same page opens without returning to Overview.
@@ -77,3 +77,6 @@ Not implemented yet: inviting users as organisation members, granting manager ro
 
 ## Known limits
 This is infrastructure plus the first usable forms. Full multi-location management, role invitations, fine-grained UI filters and compliance constraints are not yet feature-complete. Do not treat it as ready for live employee data.
+
+## Initial multi-location setup
+The three-step onboarding allows a business to create up to 20 named locations in the first transaction; after setup, an owner/admin can add further sites from Settings. Each site uses the organisation's default time zone at creation; independent site time zones are supported through the location API and planned location editing UI. The employee assignment UI allows the same employee to belong to multiple locations. The branch manager assignment API exists, but a complete invitations and manager-management UI is not yet available.
