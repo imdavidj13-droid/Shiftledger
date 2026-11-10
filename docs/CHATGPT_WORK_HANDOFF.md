@@ -1,5 +1,15 @@
 # ShiftLedger — ChatGPT Work execution handoff
 
+## LATEST SCHEDULING AND PLATFORM-SCOPE INSTRUCTIONS
+
+**Business-side development is the current project.** Do not build the standalone employee/worker-facing UI in this development batch. Design secure staff-facing API permissions in P0–P3, but after the business-side phases are 100% complete, plan and build the separate employee experience on the same backend and shared employee identities. The worker-facing web/mobile journeys will later include personal schedule, open shift claims, availability, time clock, timesheets, leave, swaps, notifications and profile.
+
+**P2 scheduling UI is not complete until the Schedule page has a real clickable monthly calendar as well as the weekly view.** Add a visible Week / Month switch and preserve the view, month/week and location in refresh-safe links and browser history. The month grid must show real scheduled shifts, open vacancies and overflow; a day cell opens its day schedule; a shift opens shift detail. Support previous/next month, today, time zones and responsive layout.
+
+**Open shifts are also mandatory now.** Manager/owner creation, publication, visibility on weekly/monthly/day calendars, and eligibility/approval of staff claims need end-to-end D1 and secure APIs. An unassigned draft is NOT automatically a published open shift. Protect against concurrent claims, access/branch violations and shift conflicts. Business-side claim review UI belongs in this batch; a purpose-built employee self-service UI belongs to the later worker-side milestone.
+
+**Workflow:** Commit only on `main` after local typecheck/build/tests; do not create branches or PRs. Keep this scoped to P0–P3 business-side functionality.
+
 ## CURRENT USER PRIORITY — COMPLETE P0, P1, P2 AND P3 TO 100%
 
 The user has explicitly directed that **everything up to and including P3 must be fully finished and verified**, before P4–P6. See the new **ACTIVE DEVELOPMENT MILESTONE** section at the top of `docs/FEATURE_BACKLOG.md`. Treat its four detailed phase exit gates as a binding checklist; do not declare 100% until every requirement has real persistence, correct role/organisation/location permissions, working UI, stable URLs, automated tests and successful deployed smoke verification. Implement as many complete vertical slices as tooling/session permits and document remaining incomplete tasks transparently.
@@ -17,13 +27,13 @@ You are taking over implementation of ShiftLedger, a React + TypeScript + Vite /
 
 FIRST: audit the repo and all relevant docs, discover what exists and works, report conflicts between docs and code. Preserve the live verified user and their existing David's Shop organisation. Confirm current CI/deploy state. Do not assume a prior assistant's declaration of 'done' proves anything.
 
-Do P0 stabilisation immediately: produce a reproducible clean install/typecheck/build/test workflow, fix any compile/runtime issues, add automated tests for auth, tenant isolation, Hono wildcard routing, browser refresh, sessions and multi-location permissions, a GitHub Actions CI gate and safe staging setup. Prevent broken commits and untested changes from reaching production. Do not change production D1 or Worker secrets without approval.
+Do P0 stabilisation immediately: verify reproducible clean install/typecheck/build/test workflow, resolve any runtime issues, maintain automated auth/tenant/routing tests and GitHub Actions CI. The user declined a separate hosted staging Worker/D1; use disposable local test D1 only. Prevent broken commits and untested changes from reaching production. Do not change production D1 or Worker secrets without approval.
 
-Then implement as much of P1 and onward in docs/FEATURE_BACKLOG.md as feasible, following its order and acceptance gates. Favour complete working vertical slices of staff invitations, location management, staff assignment, scheduling calendars/shifts/publishing, timesheets, leave, swaps, reporting, API docs and billing scaffolding, not fake functionality. Build comprehensive API security for each domain and real D1 persistence.
+Then implement as much of P1–P3 in docs/FEATURE_BACKLOG.md as feasible, following its order and acceptance gates. Focus on business-side invites, location and staff management, weekly and monthly schedules, open shifts, publishing, timesheets, leave and swaps. Do not advance to P4–P6 or build the separate worker-facing interface yet. Build comprehensive API security for each domain and real D1 persistence.
 
 Locked design: bold forest green, solid lime and ivory/white; no transparency, opacity effects, shadows, gradients or glass effects anywhere without explicit user request. Stable, direct, refresh-safe URLs for every module and detail page, including branch filters. Multi-location businesses use one organisation, shared employee identities and organisation-wide subscription; managers only see assigned branches; employees may serve several branches; timezone correctness and DST are mandatory.
 
-Engineering rules: work on an isolated branch/PR where available, run npm ci, npm run typecheck, npm run build and relevant tests before pushing, add tests and migrations, keep production account/data intact, never add secrets to git, never replace D1 with fake local storage, and do not deploy failing builds. Check exact config, schema and code instead of guessing. No broad refactoring without tests. Read current tool/package capabilities and add narrowly necessary dependencies only.
+Engineering rules: work directly on main without branches or PRs, run npm ci, npm run typecheck, npm run build and relevant tests before pushing, add tests and migrations, keep production account/data intact, never add secrets to git, never replace D1 with fake local storage, and do not deploy failing builds. Check exact config, schema and code instead of guessing. No broad refactoring without tests. Read current tool/package capabilities and add narrowly necessary dependencies only.
 
 If blocked by provider setup, credentials, destructive operations, payment activation or missing account permissions, do not invent success and do not stop unrelated implementation. Document the blocker and continue safe tasks. Explicitly ask for approval before production schema changes, billing charges, security-sensitive operations or deleting data.
 
