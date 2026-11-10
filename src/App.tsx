@@ -162,6 +162,12 @@ const countries=[
 const countryCodes = 'AF AX AL DZ AS AD AO AI AQ AG AR AM AW AU AT AZ BS BH BD BB BY BE BZ BJ BM BT BO BQ BA BW BV BR IO BN BG BF BI CV KH CM CA KY CF TD CL CN CX CC CO KM CG CD CK CR CI HR CU CW CY CZ DK DJ DM DO EC EG SV GQ ER EE SZ ET FK FO FJ FI FR GF PF TF GA GM GE DE GH GI GR GL GD GP GU GT GG GN GW GY HT HM VA HN HK HU IS IN ID IR IQ IE IM IL IT JM JP JE JO KZ KE KI KP KR KW KG LA LV LB LS LR LY LI LT LU MO MG MW MY MV ML MT MH MQ MR MU YT MX FM MD MC MN ME MS MA MZ MM NA NR NP NL NC NZ NI NE NG NU NF MK MP NO OM PK PW PS PA PG PY PE PH PN PL PT PR QA RE RO RU RW BL SH KN LC MF PM VC WS SM ST SA SN RS SC SL SG SX SK SI SB SO ZA GS SS ES LK SD SR SJ SE CH SY TW TJ TZ TH TL TG TK TO TT TN TR TM TC TV UG UA AE GB US UM UY UZ VU VE VN VG VI WF EH YE ZM ZW'.split(' ');
 const countryNames = new Intl.DisplayNames(['en'],{type:'region'});
 const allCountries=countryCodes.map(code=>({code,name:countryNames.of(code)||code})).sort((a,b)=>a.name.localeCompare(b.name));
+const timeZoneOptions = Array.from(new Set([
+ 'UTC',
+ ...Intl.supportedValuesOf('timeZone'),
+ ...countries.map(country=>country.zone),
+ initialZone
+])).sort((a,b)=>a.localeCompare(b));
 function Onboard({refresh}:{refresh:()=>void}){
  useEffect(()=>{if(window.location.pathname!=='/onboarding')window.history.replaceState({},'', '/onboarding');},[]);
  const [step,setStep]=useState(1);
@@ -197,8 +203,11 @@ function Onboard({refresh}:{refresh:()=>void}){
    </form>}
    {step===2&&<form className="form-stack" onSubmit={goNext}>
     <div className="form-grid"><Field label="Currency"><input value={currency} required maxLength={3} pattern="[A-Za-z]{3}" onChange={e=>setCurrency(e.target.value.toUpperCase())}/></Field><Field label="First day of the week"><select value={weekStart} onChange={e=>setWeekStart(Number(e.target.value))}><option value={1}>Monday</option><option value={0}>Sunday</option><option value={6}>Saturday</option></select></Field></div>
-    <Field label="Default time zone"><input required value={zone} onChange={e=>setZone(e.target.value)} placeholder="Europe/London"/></Field>
-    <p className="onboard-hint">Use an IANA time zone, such as Europe/London. Location-specific time zones are supported.</p>
+    <Field label="Default time zone">
+     <input required list="shiftledger-time-zone-options" value={zone} onChange={e=>setZone(e.target.value)} placeholder="Search by city or region, e.g. London"/>
+     <datalist id="shiftledger-time-zone-options">{timeZoneOptions.map(timeZone=><option key={timeZone} value={timeZone}/>)}</datalist>
+    </Field>
+    <p className="onboard-hint">Start typing a city or region to find a time zone. We suggest a default based on your country. Each branch can use its own time zone.</p>
     <Field label="Time display"><select value={timeFormat} onChange={e=>setTimeFormat(e.target.value)}><option value="24h">24-hour</option><option value="12h">12-hour (AM/PM)</option></select></Field>
     <div className="onboard-actions"><button type="button" className="btn outline" onClick={()=>setStep(1)}>Back</button><button className="btn primary">Continue <ArrowRight size={18}/></button></div>
    </form>}
