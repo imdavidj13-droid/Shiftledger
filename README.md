@@ -23,7 +23,7 @@ npm run dev
 
 To run the API separately: `npm run dev:api`.
 
-**Security:** Until authentication and organisation membership checks are implemented, API routes must be limited to public health/status endpoints. Do not store real workforce data yet.
+**Security:** Authentication and initial organisation membership checks exist, but full permission and cross-tenant test coverage is still required. Do not onboard real customer or employee data before completing security reviews.
 
 See `docs/PRODUCT_BLUEPRINT.md` for scope and release stages.
 
@@ -32,7 +32,7 @@ See `docs/PRODUCT_BLUEPRINT.md` for scope and release stages.
 In **Workers & Pages → shiftledger → Settings → Builds**, configure:
 
 - **Build command:** `npm run build`
-- **Deploy command:** `npx wrangler deploy`
+- **Deploy command:** `npm run deploy` (builds assets again as a safety measure)
 - **Root directory:** repository root (`/`)
 - **Production branch:** `main`
 
@@ -44,8 +44,22 @@ Apply the schema to the production database separately before enabling data endp
 npm run db:migrate:remote
 ```
 
-The initial dashboard remains a preview. Authentication, workforce CRUD, and permissions are not operational yet.
+The application now has registration, email verification, onboarding, initial multi-location employee/location records and draft-shift APIs. These features are still in development and are not a commercially ready product. See `docs/ROUTES_AND_MULTI_LOCATION.md`, `docs/AUTH_UX_FLOW.md` and `docs/REGISTRATION_TEST_PLAN.md`.
 
 ### Cloudflare build troubleshooting
 
 If saving Workers Builds settings does not start a new run, push a commit to the configured production branch (`main`). The deploy command `npm run deploy` builds the frontend before calling Wrangler, preventing the `assets.directory` missing `dist` error. Confirm new logs include `npm run deploy` and Vite output.
+
+## Stable application URLs
+
+Each authenticated module has a persistent URL: `/app/:organisationId/overview`, `/schedule`, `/team`, `/timesheets`, `/leave`, `/shift-swaps`, `/reports`, and `/settings` (with the same `/app/:organisationId/` prefix). Real anchor links support bookmarking, reload, and browser history. Organisation membership is always checked server-side. New routes should never rely only on React component state.
+
+## Multi-location businesses
+
+One organisation can operate many branches using the same application and shared team directory. The onboarding flow can create several branches at once, and employees can be assigned to multiple sites. Branch managers have scoped access at the API layer. Location manager invitations/assignment screens and full automated cross-tenant tests are still planned.
+
+**Important:** Apply `0003_multilocation.sql` to the production D1 database before creating an organisation with the updated onboarding form:
+
+```bash
+npm run db:migrate:remote
+```
