@@ -210,12 +210,16 @@ app.post('/api/v1/auth/reset-password',async c=>{
 app.use('/api/v1/organisations/*',async(c,next)=>{
   const u=await currentUser(c);if(!u)return fail(c,'Sign in required',401);
   c.set('userId',u.id);
-  const orgId=c.req.param('orgId');
-  if(orgId){
-    const membership=await c.env.DB.prepare("SELECT role FROM memberships WHERE organisation_id=? AND user_id=? AND status='active'").bind(orgId,u.id).first() as {role:string}|null;
-    if(!membership)return fail(c,'Organisation not found',404);
-    c.set('organisationId',orgId);c.set('role',membership.role);
-  }
+  // Wildcard Hono middleware does not reliably expose :orgId as a named param.
+  // Parse the organisation ID from the URL and require an active membership
+  // before any nested organisation route is executed.
+  const match=new URL(c.req.url).pathname.match(/^\/api\/v1\/organisations\/([^/]+)(?:\/|$)/);
+  if(!match)return fail(c,'Organisation not found',404);
+  const orgId=decodeURIComponent(match[1]);
+  const membership=await c.env.DB.prepare("SELECT role FROM memberships WHERE organisation_id=? AND user_id=? AND status='active'").bind(orgId,u.id).first() as {role:string}|null;
+  if(!membership)return fail(c,'Organisation not found',404);
+  c.set('organisationId',orgId);
+  c.set('role',membership.role);
   await next();
 });
 app.get('/api/v1/organisations',async c=>{
