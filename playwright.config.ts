@@ -5,6 +5,7 @@ const baseURL = 'http://127.0.0.1:' + port;
 
 export default defineConfig({
   testDir: './tests',
+  testIgnore: 'legacy.spec.ts',
   fullyParallel: false,
   workers: 1,
   timeout: 30_000,

@@ -11,7 +11,11 @@ async function login(request: APIRequestContext, email: string, secret = passwor
 
 test('deployed asset routing, health and API error envelope', async ({ request }) => {
   expect((await request.get('/api/health')).ok()).toBe(true);
-  expect((await request.get('/api/v1/ready')).ok()).toBe(true);
+  const readiness = await request.get('/api/v1/ready');
+  expect(readiness.ok()).toBe(true);
+  expect((await readiness.json()).features).toEqual({
+    openShifts:true, leave:true, timekeeping:true, shiftSwaps:true, staffProfiles:true
+  });
   const navigation = { headers: { 'Sec-Fetch-Mode': 'navigate' } };
   expect((await request.get('/app/shop/settings', navigation)).headers()['content-type']).toContain('text/html');
   const missing = await request.get('/api/v1/unknown', navigation);

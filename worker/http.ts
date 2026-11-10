@@ -1,6 +1,6 @@
 import type { Context } from 'hono';
 
-export type Bindings = { DB: D1Database; EMAIL?: { send(message: {to:string;from:string;subject:string;text:string}):Promise<{messageId:string}> }; RESEND_API_KEY?: string; MAIL_FROM?: string; APP_URL?: string; TEST_REGISTRATION_EMAIL?: string };
+export type Bindings = { DB: D1Database; EMAIL?: { send(message: {to:string;from:string;subject:string;text:string}):Promise<{messageId:string}> }; RESEND_API_KEY?: string; MAIL_FROM?: string; APP_URL?: string; TEST_REGISTRATION_EMAIL?: string; CF_VERSION_METADATA?: { id: string; tag: string } };
 export type Role = 'owner' | 'admin' | 'manager' | 'employee';
 type Vars = { userId: string; organisationId: string; role: Role; requestId: string };
 export type Env = { Bindings: Bindings; Variables: Vars };

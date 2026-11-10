@@ -1,14 +1,16 @@
 import { createHash, pbkdf2Sync } from 'node:crypto';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { coverEmail, employeeEmail, expiredToken, fixtureSessions, managerEmail, ownerEmail, password, resetToken, verifyToken } from '../tests/fixtures.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'shiftledger-tests-'));
 const fixture = join(root, 'fixture.sql');
 const wrangler = ['node_modules/wrangler/bin/wrangler.js'];
-const config = ['--config', 'wrangler.staging.jsonc', '--persist-to', root];
+const legacy = process.argv.includes('--legacy');
+const localConfigPath = 'wrangler.staging.jsonc';
+const config = ['--config', legacy ? join(root,'wrangler.legacy.json') : localConfigPath, '--persist-to', root];
 const env = { ...process.env, WRANGLER_SEND_METRICS: 'false' };
 const sql = value => "'" + value.replaceAll("'", "''") + "'";
 const sha = token => createHash('sha256').update(token).digest('hex');
@@ -57,6 +59,18 @@ function run(args) {
 }
 
 try {
+  if (legacy) {
+    const migrationDir = join(root,'migrations');
+    mkdirSync(migrationDir);
+    for (const file of readdirSync('migrations').filter(name => /^000[1-5]_.*\.sql$/.test(name))) {
+      copyFileSync(join('migrations',file),join(migrationDir,file));
+    }
+    const legacyConfig = JSON.parse(readFileSync(localConfigPath,'utf8'));
+    legacyConfig.main = resolve(legacyConfig.main);
+    legacyConfig.assets.directory = resolve(legacyConfig.assets.directory);
+    legacyConfig.d1_databases[0].migrations_dir = migrationDir;
+    writeFileSync(config[1],JSON.stringify(legacyConfig));
+  }
   writeFileSync(fixture, seed);
   run(['d1', 'migrations', 'apply', 'DB', '--local']);
   run(['d1', 'execute', 'DB', '--local', '--file', fixture]);

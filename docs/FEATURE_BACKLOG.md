@@ -79,12 +79,14 @@ See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope an
 ## Priority P0 — Stabilise the product and deployments FIRST (blocking all features)
 - [ ] Inspect repo, dependencies, scripts, Worker/D1 bindings and current deployments; document exact current state and blockers. Preserve existing production D1, account and `David's Shop` test organisation.
 - [x] Establish a repeatable local `npm ci`, `npm run typecheck`, `npm run build` and automated API/test command. Fix TypeScript, lint, formatting, runtime errors and unstable dependencies. No unverified commits.
-- [ ] Add GitHub Actions CI: install, typecheck, build, unit/integration tests, migration smoke checks and failure gate. Do not push failing builds to production. Use protected branch / PR workflow where available and preserve a known-good deployment.
-- [ ] Introduce staging/preview Worker + **separate** staging D1 and variables/secrets; no test write to production. Validate `keep_vars`, `vars`, `secret list` and Cloudflare deploy behaviour without logging credential values.
+- [x] GitHub Actions verifies install, typecheck, build, regression tests, additive migrations and the Worker dry-run on main.
+- [ ] Confirm Cloudflare dashboard build settings, deploy gate and rollback access with the production account.
+- [x] Use disposable local D1 fixtures. CI verifies both the fully migrated database and the pre-feature schema at migration 0005. Hosted staging and preview builds are outside the current policy.
 - [x] Reproduce and permanently test previous defects: PBKDF2 Cloudflare iteration limit, JSX syntax failure, wildcard Hono organisation role resolution, collection-route 404, session incorrectly cleared on API error, refresh/back/forward issues, build assets missing `dist`.
 - [x] Diagnose any current 403/404 and make session and workspace errors actionable. Never log secrets, password values or verification tokens.
 - [ ] Verify existing migration history, backups/restore, data integrity, rollback and forward-only migration strategy. No destructive or irreversible production migration without explicit approval.
-- [ ] Capture production and Worker runtime exceptions with request IDs; add health checks, structured logs, safe diagnostics, deploy smoke tests and alerting strategy.
+- [x] Add Worker version and commit health diagnostics, migration feature readiness and a read-only release smoke command. Errors carry request IDs and version IDs in structured logs.
+- [ ] Configure and verify production monitoring and alert delivery.
 - [x] Add a short `docs/IMPLEMENTATION_STATUS.md` with exact command outcomes, finished areas, failing areas, environment limitations, pending manual steps and deployed commit.
 
 **P0 acceptance:** automated CI green; app builds; existing owner can sign in, navigate, refresh and sign out; organisation-list and nested APIs return correct statuses; no regressions; preserved production data.

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { expect, test } from '@playwright/test';
 
@@ -27,6 +27,9 @@ test('additive upgrades preserve existing user, organisation, membership, shift 
     expect(db.prepare('SELECT status,is_open FROM shifts WHERE id=?').get('shift'))
       .toMatchObject({ status: 'published', is_open: 0 });
     expect(db.prepare('SELECT COUNT(*) AS count FROM shift_claims').get()).toMatchObject({ count: 0 });
+    for (const name of readdirSync(new URL('../migrations/', import.meta.url)).sort()) {
+      if (/^\d{4}_.*\.sql$/.test(name) && name > '0006_open_shifts.sql') apply(name);
+    }
     expect(db.prepare('SELECT password_hash,email_verified_at FROM users WHERE id=?').get('owner'))
       .toMatchObject({ password_hash: 'fixture-hash', email_verified_at: '2026-01-01T00:00:00.000Z' });
     expect(db.prepare('SELECT token_hash FROM sessions WHERE user_id=?').get('owner')).toMatchObject({ token_hash: 'fixture-session' });

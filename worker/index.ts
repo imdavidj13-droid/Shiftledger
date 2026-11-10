@@ -122,13 +122,23 @@ app.use('/api/*',async(c,next)=>{
   await next();
 });
 app.get('/api/health',c=>c.json({ok:true,service:'shiftledger',api:'v1'}));
-app.get('/api/v1/health',c=>c.json({ok:true,service:'shiftledger',api:'v1'}));
+app.get('/api/v1/health',c=>{
+  const version = c.env.CF_VERSION_METADATA;
+  const commit = version?.tag && /^[a-f0-9]{40}$/.test(version.tag) ? version.tag : null;
+  return c.json({ok:true,service:'shiftledger',api:'v1',commit,versionId:version?.id || null});
+});
 app.get('/api/v1/ready',async c=>{
   try {
     await c.env.DB.prepare(`SELECT o.week_start, u.email_verified_at, shifts.revision
       FROM organisations o, users u, sessions, auth_tokens, auth_rate_limits,
       locations, employees, employee_locations, location_access, memberships, shifts, audit_events, invitations, invitation_locations LIMIT 0`).all();
-    return c.json({ok:true});
+    const tables = (await c.env.DB.prepare(`SELECT name FROM sqlite_master WHERE type='table'
+      AND name IN ('shift_claims','leave_requests','time_entries','shift_swaps','employee_profiles')`).all<{name:string}>()).results;
+    const names = new Set(tables.map(table=>table.name));
+    return c.json({ok:true,features:{
+      openShifts:names.has('shift_claims'),leave:names.has('leave_requests'),timekeeping:names.has('time_entries'),
+      shiftSwaps:names.has('shift_swaps'),staffProfiles:names.has('employee_profiles')
+    }});
   } catch {
     console.error(JSON.stringify({event:'database_not_ready',requestId:c.get('requestId')}));
     return fail(c,'Database is temporarily unavailable or needs a migration.',503);
@@ -513,7 +523,7 @@ registerSwaps(app);
 registerStaff(app);
 registerInvitations(app, currentUser);
 app.onError((_error,c)=>{
-  console.error(JSON.stringify({event:'unexpected_api_error',requestId:c.get('requestId'),method:c.req.method}));
+  console.error(JSON.stringify({event:'unexpected_api_error',requestId:c.get('requestId'),method:c.req.method,versionId:c.env.CF_VERSION_METADATA?.id}));
   return fail(c,'Server error',500);
 });
 app.notFound(c=>fail(c,'Not found',404));

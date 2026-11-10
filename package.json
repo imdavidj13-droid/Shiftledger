@@ -9,10 +9,12 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply shiftledger-db --local",
-    "deploy": "npm run build && wrangler deploy",
+    "deploy": "npm run build && node scripts/deploy.mjs",
+    "smoke": "node scripts/smoke.mjs",
     "db:migrate:remote": "wrangler d1 migrations apply shiftledger-db --remote",
     "test": "playwright test",
-    "verify": "npm run typecheck && npm run build && npm test",
+    "test:legacy": "playwright test --config playwright.legacy.config.ts",
+    "verify": "npm run typecheck && npm run build && npm test && npm run test:legacy",
     "staging": "node scripts/staging.mjs"
   },
   "dependencies": {

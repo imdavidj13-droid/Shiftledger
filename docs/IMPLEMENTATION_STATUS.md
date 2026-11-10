@@ -23,7 +23,9 @@ Updated 10 November 2026. The master roadmap remains [FEATURE_BACKLOG.md](FEATUR
 - [Shift swaps (590c5c8)](https://github.com/imdavidj13-droid/Shiftledger/commit/590c5c8d125722d084fe2c397f2c0d1f4c95c48a) reached the live site with matching assets. [GitHub Actions run](https://github.com/imdavidj13-droid/Shiftledger/actions/runs/42788065066).
 - Swap validation passed `npm run verify` (39 tests) and Wrangler production dry-run. Migration `0009_shift_swaps.sql` awaits production approval.
 - The Team directory links to permanent staff profiles. Owners and administrators can edit employee names, employment status, department and position labels, and a primary branch. Managers see only profiles and branch assignments they manage. Upcoming shifts and open time entries block inactivation.
+- [Staff profiles (9f9585d)](https://github.com/imdavidj13-droid/Shiftledger/commit/9f9585dd0eda2e311d916107eb42ed4c340bec9f).
 - Staff profiles passed `npm run verify` (41 tests) and Wrangler production dry-run. Migration `0010_staff_profiles.sql` awaits production approval. Core name and employment status edits work before that migration. Reusable department and position catalogues and the five-step business setup remain open.
+- Release checks now include a production-configuration dry-run, full additive upgrade coverage, 41 full-schema tests and a separate legacy-schema test. The tagged Worker health response and read-only smoke command are documented in [DEPLOYMENT.md](DEPLOYMENT.md).
 - Leave balances, availability/position eligibility, notification delivery, editable recurring series, reusable templates and remaining P0–P3 release gates are still open. Hosted staging is outside the current deployment policy.
 
 ## Verified in local Workers and D1
@@ -50,18 +52,10 @@ Updated 10 November 2026. The master roadmap remains [FEATURE_BACKLOG.md](FEATUR
 
 Browser and API fixtures contain synthetic data. Local tests in the Work environment used headless Chromium and a loopback-only workaround for the environment’s interface enumeration restriction. The GitHub runner uses standard Playwright Chromium.
 
-## GitHub and deployments
-
-- The starting `main` commit was [dce7232](https://github.com/imdavidj13-droid/Shiftledger/commit/dce7232c47abb2cb49f1229e67b598ec4c6b4f37). Its [GitHub Actions run](https://github.com/imdavidj13-droid/Shiftledger/actions/runs/42758986303) passed the previous build-only workflow.
-- [Draft PR #1](https://github.com/imdavidj13-droid/Shiftledger/pull/1) contains the review branch and commits. The first checkpoint [1ee7383](https://github.com/imdavidj13-droid/Shiftledger/commit/1ee7383a7a7cf0592842aced37fd636fca177326) passed [GitHub Actions run 71](https://github.com/imdavidj13-droid/Shiftledger/actions/runs/42761033864). The PR links to validation for subsequent commits.
-- The existing live Worker passed the public smoke above. Its deployed version, production migration list, verified-owner sign-in and rollback target require Cloudflare account access to confirm. Use the [deployment runbook](DEPLOYMENT.md).
-- Migration `0004_invitations.sql` adds invitation tables and indexes. Migration `0005_shift_revisions.sql` adds a revision column with a default for existing shifts and a branch/time index. Both passed local migration checks, including an upgrade fixture with existing users, sessions, memberships, locations and shifts. Remote migration is pending staging and authorisation.
-- The staging config and guard are in the branch. A hosted staging Worker needs a dedicated D1 UUID, Cloudflare account access and a separate mail configuration for delivery tests.
-
 ## Remaining release gates
 
-1. Require the GitHub validation check for `main`, confirm Cloudflare production-branch and preview settings, and record the active Cloudflare deployment/version and backup checkpoint.
-2. Provision hosted staging, confirm the migration upgrade with staging records, and run the owner onboarding, sign-in and role journeys there. Add real verification, recovery and invitation delivery tests when a sender is available. Invitations currently use copied links. Benchmark and upgrade password storage with backward-compatible verification.
-3. Finish email changes and account export/deletion, organisation lifecycle, employee employment metadata, primary location, opening hours, departments and positions.
-4. Extend the core rota with recurring shifts, copy-week, templates, availability, bulk publication and notifications.
-5. Implement timekeeping, leave, swaps, reporting, payroll export, developer API documentation and commercial administration.
+1. Record the live Worker version and production migration list, validate a recovery bookmark and obtain explicit approval for the pending migrations. Confirm the owner can sign in and reopen the existing organisation. Hosted staging is outside the current policy.
+2. Verify delivery of registration, recovery and invitations with a customer-capable sender. Current invitation links can be copied manually. Review legacy password-storage upgrades, account lifecycle, production alerting and release gate settings.
+3. Finish the five-step business setup, reusable department and position catalogues, role changes, ownership transfer and account email change/export/deletion. The standalone setup component on main still needs integration, progress persistence and end-to-end testing.
+4. Finish editable recurring series, reusable shift templates, bulk edits, availability and position rules, published shift revision, and schedule notifications.
+5. Finish saved pay periods, timesheet reopening and rounding, leave balances and coverage workflows. The dedicated worker interface is a later milestone.
