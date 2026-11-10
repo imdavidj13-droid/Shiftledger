@@ -13,8 +13,11 @@ const nav: {name:Page;icon:typeof LayoutDashboard}[]=[
 ];
 async function api<T>(path:string,options:RequestInit={}):Promise<T>{
  const res=await fetch('/api/v1'+path,{...options,credentials:'include',headers:{'Content-Type':'application/json',...options.headers}});
- const data=await res.json().catch(()=>({error:'Unexpected response from the server'}));
- if(!res.ok)throw new Error(data.error||'Request failed');
+ const data: unknown = await res.json().catch(()=>({error:'Unexpected response from the server'}));
+ if(!res.ok){
+  const message = typeof data === 'object' && data !== null && 'error' in data && typeof data.error === 'string' ? data.error : 'Request failed';
+  throw new Error(message);
+ }
  return data as T;
 }
 const post=(path:string,value:unknown)=>api<any>(path,{method:'POST',body:JSON.stringify(value)});
