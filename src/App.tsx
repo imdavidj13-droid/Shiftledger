@@ -105,10 +105,68 @@ function Auth({onSuccess}:{onSuccess:()=>void}){
  <div className="auth-links">{mode==='login'?<><button onClick={()=>{setMode('register');setError('');setMessage('')}}>Create an account</button><button onClick={()=>{setMode('forgot');setError('');setMessage('')}}>Forgot password?</button></>:<button onClick={()=>{setMode('login');setError('');setMessage('')}}>Back to sign in</button>}</div>
  </div><div className="auth-copyright">Secure accounts · Organisation-level data separation</div></div></div>
 }
+const countries=[
+ {code:'GB',name:'United Kingdom',currency:'GBP',zone:'Europe/London'},
+ {code:'IE',name:'Ireland',currency:'EUR',zone:'Europe/Dublin'},
+ {code:'US',name:'United States',currency:'USD',zone:'America/New_York'},
+ {code:'CA',name:'Canada',currency:'CAD',zone:'America/Toronto'},
+ {code:'AU',name:'Australia',currency:'AUD',zone:'Australia/Sydney'},
+ {code:'NZ',name:'New Zealand',currency:'NZD',zone:'Pacific/Auckland'},
+ {code:'DE',name:'Germany',currency:'EUR',zone:'Europe/Berlin'},
+ {code:'FR',name:'France',currency:'EUR',zone:'Europe/Paris'},
+ {code:'IN',name:'India',currency:'INR',zone:'Asia/Kolkata'},
+ {code:'ZA',name:'South Africa',currency:'ZAR',zone:'Africa/Johannesburg'},
+ {code:'AE',name:'United Arab Emirates',currency:'AED',zone:'Asia/Dubai'},
+ {code:'SG',name:'Singapore',currency:'SGD',zone:'Asia/Singapore'}
+];
 function Onboard({refresh}:{refresh:()=>void}){
- const [orgName,setOrgName]=useState(''),[country,setCountry]=useState('GB'),[currency,setCurrency]=useState('GBP'),[zone,setZone]=useState(initialZone),[busy,setBusy]=useState(false),[error,setError]=useState('');
- async function create(e:FormEvent){e.preventDefault();setBusy(true);setError('');try{await post('/organisations',{name:orgName,countryCode:country,currencyCode:currency,timeZone:zone});refresh()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
- return <div className="onboard"><div className="onboard-top"><Brand/><span>ACCOUNT SETUP / 01</span></div><div className="onboard-body"><div className="onboard-heading"><div className="overline">BUSINESS ACCOUNT SETUP</div><h1>Let's set up your organisation.</h1><p>Each organisation has its own people, locations and schedule. Your information stays separated from other businesses.</p></div><section className="form-panel"><div className="section-title"><Building2 size={24}/><div><h2>Organisation details</h2><p>You can add locations and staff afterwards.</p></div></div>{error&&<Alert message={error}/>}<form className="form-stack" onSubmit={create}><Field label="Organisation name"><input required minLength={2} maxLength={100} placeholder="e.g. Cornerstone Coffee" value={orgName} onChange={e=>setOrgName(e.target.value)}/></Field><div className="form-grid"><Field label="Country code (ISO 2)"><input required maxLength={2} pattern="[A-Za-z]{2}" value={country} onChange={e=>setCountry(e.target.value.toUpperCase())}/></Field><Field label="Currency code (ISO 3)"><input required maxLength={3} pattern="[A-Za-z]{3}" value={currency} onChange={e=>setCurrency(e.target.value.toUpperCase())}/></Field></div><Field label="IANA time zone"><input required value={zone} onChange={e=>setZone(e.target.value)} placeholder="Europe/London"/></Field><button className="btn primary" disabled={busy}>{busy?'Creating…':'Create organisation'} <ArrowRight size={18}/></button></form></section></div></div>
+ const [step,setStep]=useState(1);
+ const [orgName,setOrgName]=useState(''),[industry,setIndustry]=useState(''),[teamSize,setTeamSize]=useState('');
+ const [country,setCountry]=useState('GB'),[currency,setCurrency]=useState('GBP'),[zone,setZone]=useState(initialZone);
+ const [weekStart,setWeekStart]=useState(1),[timeFormat,setTimeFormat]=useState('24h');
+ const [multiLocation,setMultiLocation]=useState(false),[firstLocation,setFirstLocation]=useState('');
+ const [busy,setBusy]=useState(false),[error,setError]=useState('');
+ const goNext=(e:FormEvent)=>{e.preventDefault();setError('');setStep(previous=>Math.min(3,previous+1));};
+ function selectCountry(next:string){setCountry(next);const preset=countries.find(c=>c.code===next);if(preset){setCurrency(preset.currency);setZone(preset.zone);}}
+ async function create(e:FormEvent){
+   e.preventDefault();setBusy(true);setError('');
+   try {
+    await post('/organisations',{name:orgName,countryCode:country,currencyCode:currency,timeZone:zone,industry:industry||null,teamSize:teamSize||null,weekStart,timeFormat,...(firstLocation.trim()?{firstLocation:firstLocation.trim()}:{})});
+    refresh();
+   }catch(err){setError((err as Error).message)}finally{setBusy(false)}
+ }
+ return <div className="onboard"><div className="onboard-top"><Brand/><span>BUSINESS SETUP / {step} OF 3</span></div>
+ <div className="onboard-body">
+  <div className="overline">BUILD YOUR BUSINESS WORKSPACE</div>
+  <h1>{step===1?'Tell us about your organisation.':step===2?'Set your scheduling preferences.':'Choose how to begin.'}</h1>
+  <p className="onboard-description">{step===1?'One organisation can contain multiple sites, branches and teams.':step===2?'We’ll use these defaults across the organisation. Individual locations can have their own time zones.':'Create your organisation and optionally set up its first location. You can add more branches later.'}</p>
+  <div className="onboard-progress" aria-label={'Onboarding step '+step+' of 3}>{[1,2,3].map(n=><span key={n} className={n<=step?'active':''}/>)}</div>
+  <section className="form-panel"><div className="section-title"><Building2 size={24}/><div><h2>{step===1?'Business details':step===2?'How your business operates':'Your first workspace'}</h2><p>{step===1?'Start with the essentials.':step===2?'These settings can be updated later.':'All locations belong to this same organisation account.'}</p></div></div>
+   {error&&<Alert message={error}/>}
+   {step===1&&<form className="form-stack" onSubmit={goNext}>
+    <Field label="Organisation name"><input required minLength={2} maxLength={100} value={orgName} onChange={e=>setOrgName(e.target.value)} placeholder="e.g. Cornerstone Coffee"/></Field>
+    <Field label="Industry (optional)"><select value={industry} onChange={e=>setIndustry(e.target.value)}><option value="">Select an industry</option>{['Hospitality','Retail','Healthcare','Care services','Cleaning and facilities','Logistics','Education','Professional services','Manufacturing','Other'].map(t=><option key={t} value={t}>{t}</option>)}</select></Field>
+    <Field label="Country"><select required value={country} onChange={e=>selectCountry(e.target.value)}>{countries.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}</select></Field>
+    <p className="onboard-hint">More countries will be available as we expand international presets.</p>
+    <Field label="Approximate team size (optional)"><select value={teamSize} onChange={e=>setTeamSize(e.target.value)}><option value="">Select team size</option>{['1–5','6–20','21–50','51–100','101–250','251+'].map(t=><option key={t} value={t}>{t}</option>)}</select></Field>
+    <button className="btn primary full">Continue <ArrowRight size={18}/></button>
+   </form>}
+   {step===2&&<form className="form-stack" onSubmit={goNext}>
+    <div className="form-grid"><Field label="Currency"><input value={currency} required maxLength={3} pattern="[A-Za-z]{3}" onChange={e=>setCurrency(e.target.value.toUpperCase())}/></Field><Field label="First day of the week"><select value={weekStart} onChange={e=>setWeekStart(Number(e.target.value))}><option value={1}>Monday</option><option value={0}>Sunday</option><option value={6}>Saturday</option></select></Field></div>
+    <Field label="Default time zone"><input required value={zone} onChange={e=>setZone(e.target.value)} placeholder="Europe/London"/></Field>
+    <p className="onboard-hint">Use an IANA time zone, such as Europe/London. Location-specific time zones are supported.</p>
+    <Field label="Time display"><select value={timeFormat} onChange={e=>setTimeFormat(e.target.value)}><option value="24h">24-hour</option><option value="12h">12-hour (AM/PM)</option></select></Field>
+    <div className="onboard-actions"><button type="button" className="btn outline" onClick={()=>setStep(1)}>Back</button><button className="btn primary">Continue <ArrowRight size={18}/></button></div>
+   </form>}
+   {step===3&&<form className="form-stack" onSubmit={create}>
+    <div className="workspace-choice"><Building2 size={23}/><div><strong>{orgName}</strong><span>{country} · {currency} · {zone}</span></div></div>
+    <Field label="Location setup"><select value={multiLocation?'multiple':'single'} onChange={e=>setMultiLocation(e.target.value==='multiple')}><option value="single">One location for now</option><option value="multiple">Multiple locations / branches</option></select></Field>
+    <p className="onboard-hint">{multiLocation?'Your branches will all use this same account. Start with one location, then add the others from Settings.':'You can add more locations later without creating another organisation.'}</p>
+    <Field label="First location name (optional)"><input value={firstLocation} onChange={e=>setFirstLocation(e.target.value)} maxLength={100} placeholder="e.g. City Centre Branch"/></Field>
+    <div className="onboard-actions"><button type="button" className="btn outline" onClick={()=>setStep(2)}>Back</button><button className="btn primary" disabled={busy}>{busy?'Creating…':'Create organisation'} <ArrowRight size={18}/></button></div>
+   </form>}
+  </section>
+ </div></div>;
 }
 function Stat({title,value,note}:{title:string;value:string|number;note:string}){return <div className="stat-card"><div className="stat-label">{title}</div><strong>{value}</strong><span>{note}</span></div>}
 function Empty({icon,heading,description}:{icon:ReactNode;heading:string;description:string}){return <div className="empty">{icon}<h3>{heading}</h3><p>{description}</p></div>}
