@@ -225,6 +225,11 @@ app.get('/api/v1/organisations',async c=>{
 });
 app.post('/api/v1/organisations',async c=>{
   const u=await currentUser(c);if(!u)return fail(c,'Sign in required',401);
+  const columns=await c.env.DB.prepare('PRAGMA table_info(organisations)').all() as {results:{name:string}[]};
+  if(['industry','team_size_band','week_start','time_format'].some(col=>!columns.results.some(row=>row.name===col))){
+    console.error('Organisation onboarding blocked: D1 migration 0003_multilocation.sql not yet applied');
+    return fail(c,'Business setup needs a database update. The administrator must apply the latest D1 migration.',503);
+  }
   const x=await body(c),name=safeStr(x?.name,100),country=safeStr(x?.countryCode,2).toUpperCase(),currency=safeStr(x?.currencyCode,3).toUpperCase(),zone=safeStr(x?.timeZone,64);
   const industry=safeStr(x?.industry,60)||null,teamSize=safeStr(x?.teamSize,20)||null;
   const weekStart=x?.weekStart??1,timeFormat=x?.timeFormat??'24h';
