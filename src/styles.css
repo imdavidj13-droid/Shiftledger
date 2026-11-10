@@ -23,3 +23,21 @@
 .confirmation-footer{text-align:center;background:#075641;color:#fff;font-size:12px;font-weight:700;padding:17px}
 
 .confirmation-preview-label{background:#FFE1A8;color:#10261F;border:2px solid #10261F;border-radius:5px;padding:10px 12px;margin-bottom:25px;font-size:11px;font-weight:800;letter-spacing:1px;text-align:center}
+
+
+/* Three-step organisation onboarding: solid colour, no transparency, no shadows. */
+.onboard-description{color:#315b43;max-width:680px;font-size:14px;margin:12px 0 25px}
+.onboard-body>h1{font-size:clamp(30px,4vw,44px);margin:14px 0 10px;line-height:1.15}
+.onboard-progress{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:28px 0 18px}
+.onboard-progress span{height:9px;background:#bcd1c3;border-radius:3px}
+.onboard-progress span.active{background:#0b8062}
+.onboard-hint{font-size:12px;line-height:1.55;color:#315b43;background:#e4f2d9;border-left:5px solid #0b8062;padding:12px 14px;margin:0}
+.onboard-actions{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:12px}
+.onboard-actions .btn.primary{flex:1}
+.workspace-choice{display:flex;align-items:center;gap:14px;padding:17px;background:#c9f05e;border:2px solid #075641;border-radius:8px}
+.workspace-choice svg{color:#075641;flex-shrink:0}
+.workspace-choice strong,.workspace-choice span{display:block}
+.workspace-choice strong{font-size:15px;color:#10261f}
+.workspace-choice span{font-size:12px;color:#315b43;margin-top:5px;overflow-wrap:anywhere}
+.org-picker{background:#fff;color:#075641;border:2px solid #c9f05e;margin-bottom:20px;font-size:12px;font-weight:700}
+@media(max-width:750px){.onboard-description{font-size:13px}.onboard-actions{flex-wrap:wrap}.onboard-actions .btn{flex:1}}
