@@ -14,11 +14,11 @@ To apply pending migrations: `npm run db:migrate:remote`.
 
 ## Live manual acceptance tests
 1. Open the production site in a private browser window.
-2. Register with a new, real test inbox and a 12+ character password.
+2. Register using a real test email and a 12+ character password. No personal full name or business name is required on the registration form.
 3. Confirm the new 'Check your email' state appears. Check spam as well as inbox.
 4. Follow the verification link; the page must show success or a clear error **without immediately redirecting**.
 5. Sign in with the new account; confirm the organisation creation form appears.
-6. Create an organisation with correct country, currency and IANA time zone.
+6. Create an organisation with its business name, country, currency and IANA time zone. Confirm the business name is held on the organisation, not treated as the user's full name.
 7. Refresh the browser and confirm the session and organisation persist.
 8. Sign out, refresh, and ensure protected data is no longer accessible.
 9. Register another inbox, try logging in **before** verification and confirm it is blocked.
@@ -36,3 +36,9 @@ To apply pending migrations: `npm run db:migrate:remote`.
 
 ## Known limits
 The current code does not implement team invitations, 2FA, account deletion, or complete workforce operations. Treat these as outstanding, not live features. Signup is not considered production-ready until the test list is completed.
+
+## Registration identity separation
+- Registration collects only email and password.
+- A provisional account display label uses the registered email until a dedicated profile editor is introduced. Do not interpret this as a personal name.
+- The business name is collected only during organisation onboarding and stored on the organisation record.
+- Future user profile editing should provide an optional personal display name and never overwrite the legal organisation name.
