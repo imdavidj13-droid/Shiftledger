@@ -36,6 +36,10 @@ function testRecipientAllowed(env: Bindings, email: string) {
   const permitted = env.TEST_REGISTRATION_EMAIL?.trim().toLowerCase();
   return Boolean(permitted && isEmail(permitted) && email === permitted);
 }
+function appBaseUrl(env: Bindings): string {
+  if (!env.APP_URL) throw new Error('APP_URL is required for email links');
+  return env.APP_URL.replace(/\/$/, '');
+}
 function mailReady(env: Bindings) {
   const senderReady = Boolean(env.APP_URL && env.MAIL_FROM && (env.EMAIL || env.RESEND_API_KEY));
   if (!senderReady) return false;
@@ -107,7 +111,7 @@ app.post('/api/v1/auth/register',async c=>{
   const id=crypto.randomUUID(),salt=rnd(16),hash=await derivePassword(password,salt);
   await c.env.DB.prepare('INSERT INTO users(id,email_normalized,display_name,password_hash,password_salt) VALUES(?,?,?,?,?)').bind(id,email,name,hash,salt).run();
   const token=await tokenFor(c,id,'verify_email');
-  const link=c.env.APP_URL.replace(/\/$/,'')+'/?verify='+encodeURIComponent(token);
+  const link=appBaseUrl(c.env)+'/?verify='+encodeURIComponent(token);
   const sent=await sendMail(c,email,'Verify your ShiftLedger email','Verify your account by visiting: '+link+'\nThis link expires in 24 hours.');
   if(!sent)return fail(c,'Account created, but email delivery failed. Contact support or retry verification.',503);
   return c.json({ok:true,message:'Check your email for a verification link.'},201);
@@ -122,7 +126,7 @@ app.post('/api/v1/auth/resend-verification',async c=>{
   const row=await c.env.DB.prepare('SELECT id,email_verified_at FROM users WHERE email_normalized=?').bind(email).first() as {id:string;email_verified_at:string|null}|null;
   if(row&&!row.email_verified_at){
     const token=await tokenFor(c,row.id,'verify_email');
-    const link=c.env.APP_URL.replace(/\/$/,'')+'/?verify='+encodeURIComponent(token);
+    const link=appBaseUrl(c.env)+'/?verify='+encodeURIComponent(token);
     const sent=await sendMail(c,email,'Verify your ShiftLedger email','Verify your email using this link: '+link+'\nThis link expires in 24 hours.');
     if(!sent)return fail(c,'Could not deliver verification email. Please try again.',503);
   }
@@ -168,7 +172,7 @@ app.post('/api/v1/auth/forgot-password',async c=>{
   const row=await c.env.DB.prepare('SELECT id FROM users WHERE email_normalized=?').bind(email).first() as {id:string}|null;
   if(row&&mailReady(c.env)){
     const token=await tokenFor(c,row.id,'reset_password');
-    await sendMail(c,email,'Reset your ShiftLedger password','Reset your password: '+c.env.APP_URL.replace(/\/$/,'')+'/?reset='+token);
+    await sendMail(c,email,'Reset your ShiftLedger password','Reset your password: '+appBaseUrl(c.env)+'/?reset='+token);
   }
   return c.json({ok:true,message:'If this email is registered, reset instructions will be sent.'});
 });
