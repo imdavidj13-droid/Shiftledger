@@ -55,3 +55,10 @@
 .location-setup-row .field{flex:1;min-width:0}
 .location-setup-row .btn{flex:none}
 @media(max-width:600px){.location-setup-row{flex-direction:column;align-items:stretch}}
+
+.top-location-picker{display:none}
+@media(max-width:750px){
+ .sidebar .org-picker{display:none}
+ .top-location-picker{display:block;max-width:140px;min-width:90px;min-height:36px;padding:6px 7px;border:2px solid #075641;background:#fff;color:#075641;font-size:11px;font-weight:700}
+ .top-right{gap:8px}
+}
