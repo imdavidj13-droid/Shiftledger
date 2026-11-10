@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
-type Bindings = { DB: D1Database; EMAIL?: { send(message: {to:string;from:string;subject:string;text:string}):Promise<{messageId:string}> }; RESEND_API_KEY?: string; MAIL_FROM?: string; APP_URL?: string };
+type Bindings = { DB: D1Database; EMAIL?: { send(message: {to:string;from:string;subject:string;text:string}):Promise<{messageId:string}> }; RESEND_API_KEY?: string; MAIL_FROM?: string; APP_URL?: string; TEST_REGISTRATION_EMAIL?: string };
 type Vars = { userId: string; organisationId: string; role: string };
 const app = new Hono<{ Bindings: Bindings; Variables: Vars }>();
 const jsonError = (message: string, status: 400|401|403|404|409|422|429|500|503 = 400) => ({ error: message, status });
@@ -30,8 +30,19 @@ async function currentUser(c: any):Promise<{id:string;display_name:string;email_
   const token=getCookie(c,'sl_session');if(!token||!/^([a-f0-9]{64})$/.test(token))return null;
   return await c.env.DB.prepare('SELECT users.id,users.display_name,users.email_normalized FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token_hash=? AND sessions.expires_at>? AND users.email_verified_at IS NOT NULL').bind(await sha(token),isoNow()).first() as any;
 }
+function testRecipientAllowed(env: Bindings, email: string) {
+  // The shared Resend testing sender must never enable public signups.
+  if (!env.MAIL_FROM?.toLowerCase().includes('onboarding@resend.dev')) return true;
+  const permitted = env.TEST_REGISTRATION_EMAIL?.trim().toLowerCase();
+  return Boolean(permitted && isEmail(permitted) && email === permitted);
+}
 function mailReady(env: Bindings) {
-  return Boolean(env.APP_URL && env.MAIL_FROM && (env.EMAIL || env.RESEND_API_KEY));
+  const senderReady = Boolean(env.APP_URL && env.MAIL_FROM && (env.EMAIL || env.RESEND_API_KEY));
+  if (!senderReady) return false;
+  if (env.MAIL_FROM?.toLowerCase().includes('onboarding@resend.dev')) {
+    return Boolean(env.RESEND_API_KEY && env.TEST_REGISTRATION_EMAIL && isEmail(env.TEST_REGISTRATION_EMAIL.trim()));
+  }
+  return true;
 }
 async function sendMail(c: any,email:string,subject:string,text:string) {
   if(!mailReady(c.env)) return false;
@@ -89,6 +100,7 @@ app.post('/api/v1/auth/register',async c=>{
   const x=await body(c);if(!x)return fail(c,'Invalid JSON');
   const email=safeStr(x.email,254).toLowerCase(),name=safeStr(x.name,80),password=x.password;
   if(!isEmail(email)||name.length<2||typeof password!=='string'||!passValid(password))return fail(c,'Enter a name, valid email and a password of 12–128 characters.',422);
+  if(!testRecipientAllowed(c.env,email))return fail(c,'Registration is temporarily restricted to the configured development test account.',403);
   if(!await rateLimit(c,'register:'+email))return fail(c,'Too many attempts. Try again later.',429);
   const found=await c.env.DB.prepare('SELECT id FROM users WHERE email_normalized=?').bind(email).first();
   if(found)return c.json({ok:true,message:'If registration is available for this email, instructions will be sent.'});
@@ -104,6 +116,7 @@ app.post('/api/v1/auth/resend-verification',async c=>{
   if(!mailReady(c.env))return fail(c,'Email delivery is not configured.',503);
   const x=await body(c),email=safeStr(x?.email,254).toLowerCase();
   if(!isEmail(email))return fail(c,'Enter a valid email address',422);
+  if(!testRecipientAllowed(c.env,email))return fail(c,'Verification email delivery is restricted during development.',403);
   const ip=c.req.header('CF-Connecting-IP')||'unknown';
   if(!await rateLimit(c,'resend:'+ip+':'+email,3))return fail(c,'Too many requests. Try again in 15 minutes.',429);
   const row=await c.env.DB.prepare('SELECT id,email_verified_at FROM users WHERE email_normalized=?').bind(email).first() as {id:string;email_verified_at:string|null}|null;
@@ -150,6 +163,7 @@ app.get('/api/v1/auth/me',async c=>{
 app.post('/api/v1/auth/forgot-password',async c=>{
   const x=await body(c),email=safeStr(x?.email,254).toLowerCase();
   if(!isEmail(email))return fail(c,'Invalid email',422);
+  if(!testRecipientAllowed(c.env,email))return c.json({ok:true,message:'If this email is registered, reset instructions will be sent.'});
   if(!await rateLimit(c,'reset:'+email,4))return fail(c,'Too many requests',429);
   const row=await c.env.DB.prepare('SELECT id FROM users WHERE email_normalized=?').bind(email).first() as {id:string}|null;
   if(row&&mailReady(c.env)){
