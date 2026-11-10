@@ -236,6 +236,7 @@ function Dashboard({user,org,organisations,page,resourceId,locationFilter,onLogo
   go(appPath(org.id,page)+(query.size?'?'+query:''));
  };
  const [locations,setLocations]=useState<Location[]>([]),[employees,setEmployees]=useState<Employee[]>([]),[shifts,setShifts]=useState<Shift[]>([]);
+ const [openShifts,setOpenShifts]=useState(false);
  const [employeeLocations,setEmployeeLocations]=useState<EmployeeLocation[]>([]);
  const [employeeName,setEmployeeName]=useState('');
  const [busy,setBusy]=useState(false);
@@ -243,8 +244,8 @@ function Dashboard({user,org,organisations,page,resourceId,locationFilter,onLogo
  const canAdminister=['owner','admin'].includes(org.role);
  async function reload(){setError('');setLoadFailed(false);setLoading(true);try{
   const base='/organisations/'+org.id;
-  const responses=await Promise.all([api<{locations:Location[]}>(base+'/locations'),canManage?api<{employees:Employee[]}>(base+'/employees'):Promise.resolve({employees:[]}),api<{shifts:Shift[]}>(base+'/shifts'),canManage?api<{assignments:EmployeeLocation[]}>(base+'/employee-locations'):Promise.resolve({assignments:[]})]);
-  setLocations(responses[0].locations);setEmployees(responses[1].employees);setShifts(responses[2].shifts);setEmployeeLocations(responses[3].assignments);
+  const responses=await Promise.all([api<{locations:Location[]}>(base+'/locations'),canManage?api<{employees:Employee[]}>(base+'/employees'):Promise.resolve({employees:[]}),api<{shifts:Shift[];openShifts?:boolean}>(base+'/shifts'),canManage?api<{assignments:EmployeeLocation[]}>(base+'/employee-locations'):Promise.resolve({assignments:[]})]);
+  setLocations(responses[0].locations);setEmployees(responses[1].employees);setShifts(responses[2].shifts);setOpenShifts(Boolean(responses[2].openShifts));setEmployeeLocations(responses[3].assignments);
  }catch(e){setLoadFailed(true);setError((e as Error).message)}finally{setLoading(false)}}
  useEffect(()=>{void reload()},[org.id]);
  const filteredShifts=locationFilter?shifts.filter(s=>s.location_id===locationFilter):shifts;
@@ -273,7 +274,7 @@ function Dashboard({user,org,organisations,page,resourceId,locationFilter,onLogo
   const location=locations.find(l=>l.id===a.location_id);
   return location&&<button type="button" className="btn outline" key={location.id} disabled={busy} onClick={()=>void action(()=>write(base+'/employee-locations/'+e.id+'/'+location.id,{},'DELETE'),'Location assignment removed.')}>Remove {location.name}</button>;
  })}</div><select aria-label={'Assign location to '+e.display_name} value="" disabled={busy||!locations.length} onChange={event=>{const locationId=event.target.value;if(locationId)void action(()=>post(base+'/employee-locations',{employeeId:e.id,locationId}),'Location assigned to employee.')}}><option value="">Assign to a location…</option>{locations.filter(l=>!employeeLocations.some(x=>x.employee_id===e.id&&x.location_id===l.id)).map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></>}</div></div>)}</div>:<Empty icon={<UsersRound size={33}/>} heading="No employees yet" description="Create your first employee directory record."/>}</section>{['owner','admin'].includes(org.role)&&<section className="panel"><div className="panel-title"><h2>Add employee</h2></div><form className="form-stack pad" onSubmit={e=>{e.preventDefault();void action(()=>post(base+'/employees',{name:employeeName,locationId:locationFilter}),'Employee added'+(locationFilter?' to the selected location.':'.')).then(ok=>{if(ok)setEmployeeName('')})}}><Field label="Full name"><input required minLength={2} value={employeeName} onChange={e=>setEmployeeName(e.target.value)}/></Field><div className="form-hint">One employee record can be assigned to several branches. Use Access to invite them to sign in.</div><button disabled={busy} className="btn primary"><Plus size={17}/> Add employee</button></form></section>}</div>}
- {page==='Schedule'&&<Rota org={org} locations={locations} employees={employees} assignments={employeeLocations} locationFilter={locationFilter} resourceId={resourceId}/>}
+ {page==='Schedule'&&<Rota org={org} locations={locations} employees={employees} assignments={employeeLocations} locationFilter={locationFilter} resourceId={resourceId} openShifts={openShifts}/>}
  {(['Timesheets','Leave','Shift swaps','Reports'] as Page[]).includes(page)&&<section className="panel"><div className="panel-title"><h2>{page} module</h2><span>Not enabled</span></div><Empty icon={<ShieldCheck size={33}/>} heading="Not yet available" description="This module will not accept or simulate employee data until its API, permissions and approval flow are implemented."/></section>}
  </>}
  <footer>© ShiftLedger · Real organisation data · No simulated statistics</footer></main></div></div>;

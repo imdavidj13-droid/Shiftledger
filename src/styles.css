@@ -118,3 +118,23 @@ a:focus-visible{outline:3px solid #10261f;outline-offset:3px}
 }
 @media(max-width:390px){.topbar{padding:0 8px}.breadcrumb span,.breadcrumb b{display:none}.top-right{gap:5px}.top-location-picker{max-width:105px}}
 @media(max-width:360px){.topbar .breadcrumb{display:none}.topbar{justify-content:flex-end}}
+
+.rota-views{padding-right:8px;border-right:1px solid var(--border)}
+.rota-days.rota-view-month{grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.rota-days.rota-view-day{grid-template-columns:minmax(0,1fr);background:none;border:0}
+.rota-weekday{text-align:center;font-size:12px;font-weight:800;padding:5px 0}
+.rota-blank{background:var(--tint);border:1px solid var(--border);border-radius:6px}
+.rota-day h3:has(a){padding:0}
+.rota-day h3 a{display:block;color:var(--dark);text-decoration:none;padding:10px 3px}
+.rota-day h3 a:hover,.rota-day h3 a[aria-current=date]{background:var(--lime)}
+.rota-day h3 a:focus-visible,.rota-more:focus-visible,.rota-shift:focus-visible{outline:2px solid var(--green);outline-offset:1px}
+.rota-more{display:block;padding:4px;color:var(--green);font-size:11px;font-weight:800;text-align:center}
+.rota-view-month .rota-day{min-height:100px}
+@media(max-width:650px){
+  .rota-view-month .rota-day{min-height:72px;border-width:1px}
+  .rota-view-month .rota-day ul{padding:2px;gap:3px}
+  .rota-view-month .rota-shift{padding:3px 2px;border-left-width:2px}
+  .rota-view-month .rota-shift strong,.rota-view-month .rota-shift span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+.rota-shift.rota-vacancy{background:#ffe1a8;border-left-color:#89640c}
+.rota-checkbox{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--dark)}

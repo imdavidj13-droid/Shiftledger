@@ -19,9 +19,9 @@ export async function sha(s: string) { return hex(new Uint8Array(await crypto.su
 export function orgAdmin(c: ApiContext) {
   return c.get('role') === 'owner' || c.get('role') === 'admin';
 }
-export function audit(c: ApiContext, action: string, type: string, resourceId: string, details = {}) {
+export function audit(c: ApiContext, action: string, type: string, resourceId: string, details = {}, ifChanged = false) {
   return c.env.DB.prepare(`INSERT INTO audit_events(id,organisation_id,actor_user_id,action,resource_type,resource_id,details_json)
-    VALUES(?,?,?,?,?,?,?)`).bind(crypto.randomUUID(),c.get('organisationId'),c.get('userId'),action,type,resourceId,JSON.stringify(details));
+    ${ifChanged ? 'SELECT ?,?,?,?,?,?,? WHERE changes()>0' : 'VALUES(?,?,?,?,?,?,?)'}`).bind(crypto.randomUUID(),c.get('organisationId'),c.get('userId'),action,type,resourceId,JSON.stringify(details));
 }
 export const orgRoute = '/api/v1/organisations/:orgId';
 export function isEmail(s: string) {return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)&&s.length<=254;}

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
-import { employeeEmail, expiredToken, fixtureSessions, managerEmail, ownerEmail, password, resetToken, verifyToken } from '../tests/fixtures.mjs';
+import { coverEmail, employeeEmail, expiredToken, fixtureSessions, managerEmail, ownerEmail, password, resetToken, verifyToken } from '../tests/fixtures.mjs';
 
 const root = mkdtempSync(join(tmpdir(), 'shiftledger-tests-'));
 const fixture = join(root, 'fixture.sql');
@@ -17,6 +17,7 @@ const hash = pbkdf2Sync(password, salt, 100000, 32, 'sha256').toString('hex');
 const users = [
   ['owner', ownerEmail, 'Workspace Owner', true],
   ['manager', managerEmail, 'Branch Manager', true],
+  ['cover', coverEmail, 'Cover Employee', true],
   ['employee', employeeEmail, 'Branch Employee', true],
   ['reset-user', 'reset@example.test', 'Recovery User', true],
   ['verify-user', 'verify@example.test', 'Verification User', false],
@@ -35,15 +36,15 @@ INSERT INTO organisations (id,name,slug,country_code,time_zone,currency_code) VA
  ('shop','Fixture Shop','fixture-shop','GB','Europe/London','GBP'),
  ('other','Other Business','other-business','US','America/New_York','USD');
 INSERT INTO memberships (organisation_id,user_id,role) VALUES
- ('shop','owner','owner'),('shop','manager','manager'),('shop','employee','employee'),('other','owner','owner');
+ ('shop','owner','owner'),('shop','manager','manager'),('shop','employee','employee'),('shop','cover','employee'),('other','owner','owner');
 INSERT INTO locations (id,organisation_id,name,time_zone) VALUES
  ('north','shop','North','Europe/London'),('south','shop','South','America/New_York'),
  ('west','shop','West','America/Los_Angeles'),('foreign','other','Other Branch','America/New_York');
 INSERT INTO location_access (organisation_id,location_id,user_id) VALUES ('shop','north','manager');
 INSERT INTO employees (id,organisation_id,user_id,display_name) VALUES
  ('shared','shop','employee','Shared employee'),('south-only','shop',NULL,'South only'),
- ('foreign-employee','other',NULL,'Foreign employee');
-INSERT INTO employee_locations VALUES ('shop','shared','north'),('shop','shared','south'),('shop','south-only','south');
+ ('foreign-employee','other',NULL,'Foreign employee'),('cover-staff','shop','cover','Cover Employee');
+INSERT INTO employee_locations VALUES ('shop','shared','north'),('shop','shared','south'),('shop','south-only','south'),('shop','cover-staff','south');
 INSERT INTO auth_tokens (token_hash,user_id,purpose,expires_at) VALUES
  ('${sha(verifyToken)}','verify-user','verify_email','2099-01-01T00:00:00.000Z'),
  ('${sha(resetToken)}','reset-user','reset_password','2099-01-01T00:00:00.000Z'),

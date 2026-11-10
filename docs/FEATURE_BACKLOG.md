@@ -97,13 +97,15 @@ See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope an
 
 ## Priority P2 — Scheduling, rotas and notifications
 - [x] Weekly rota UI (desktop and mobile), permanent week and shift URLs, location filtering, time zones and DST, using D1 records.
-- [ ] Additional day/list/month views and team or role filters.
+- [x] Branch-filtered day and month calendar views with stable URLs, calendar navigation, individual shift links and overflow.
+- [ ] Additional list view and team or role filters.
 - [x] Create, edit and discard draft shifts with unpaid breaks and concurrent-edit protection.
 - [ ] Duplicate shifts, recurring patterns, shift templates, copy week, bulk edits, skill/position requirements and shift notes.
 - [x] Permissioned single-shift publishing and cancellation with revisions, audit events and employee visibility.
 - [ ] Review state, updates to published shifts, bulk publishing and idempotent staff notifications.
 - [ ] Conflict engine: overlapping shifts across locations, unavailability, approved leave, breaks, min/max hours, overtime warning, optional rest requirements, working-time rules as *configurable warnings* until jurisdiction-reviewed.
-- [ ] Open/unassigned shifts, claims, manager approval and notifications; schedule visibility appropriate to role.
+- [x] Implement and locally test explicitly marked open shifts, one pending claim per vacancy and branch-scoped approval or decline.
+- [ ] Enable open shifts in production after approval of migration 0006. Finish eligibility rules for availability/leave/positions, claim notifications and configurable auto-approval.
 - [ ] User notifications centre: in-app and email templates, opt-in preferences, queued/retried/idempotent messages, digest modes, delivery/bounce diagnostics and quota observability.
 - [ ] Employee personal schedule, calendar export (ICS), print/share/export and clear shift details. Avoid fake scheduling metrics.
 

@@ -2,6 +2,15 @@
 
 Updated 10 November 2026. The master roadmap remains [FEATURE_BACKLOG.md](FEATURE_BACKLOG.md).
 
+## Main branch updates on 10 November 2026
+
+- Baseline `91f1eea` passed [GitHub Actions](https://github.com/imdavidj13-droid/Shiftledger/actions/runs/42783293041). The live Worker returned HTTP 200 on `/api/v1/health`. The baseline deployed commit is unconfirmed.
+- Schedule has a Week / Month selector, a seven-column month calendar, date links into the daily rota, and shift detail links. URLs retain branch and period, and the day/month views read all pages of overlapping D1 shifts. Covered on mobile, with leap-day and daylight-saving cases.
+- Managers can mark a draft as a vacancy, publish it and approve or decline a staff API claim from shift detail. The database reserves one pending claim at a time. Approval rechecks active membership, branch assignment and cross-branch shift overlaps before assigning the employee. Existing unassigned shifts retain their status and are not advertised as vacancies.
+- `npm ci`, `npm run verify` (29 tests), and Wrangler production dry-run passed locally. The Work environment used a loopback interface workaround and a compatible headless Chromium binary.
+- Migration `0006_open_shifts.sql` passed on disposable D1 and an upgrade fixture. Production application is awaiting explicit approval. The application keeps the existing scheduling path on a pre-0006 database and enables the open-shift controls once 0006 is present.
+- Leave/availability/position eligibility, notification delivery, recurring rotas, templates and the remaining P0–P3 release gates are still open. Hosted staging is outside the current deployment policy.
+
 ## Verified in local Workers and D1
 
 - Reproducible Node 24 install, TypeScript validation, Vite production build, Wrangler bundle and GitHub Actions regression workflow.

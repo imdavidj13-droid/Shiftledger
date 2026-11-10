@@ -1,6 +1,7 @@
 export const password = 'shiftledger-fixture-only';
 export const ownerEmail = 'owner@example.test';
 export const employeeEmail = 'employee@example.test';
+export const coverEmail = 'cover@example.test';
 export const managerEmail = 'manager@example.test';
 export const verifyToken = 'a'.repeat(64);
 export const resetToken = 'b'.repeat(64);
@@ -11,5 +12,6 @@ export const fixtureSessions = {
   'employee@example.test': '3'.repeat(64),
   'onboard@example.test': '4'.repeat(64),
   'join@example.test': '5'.repeat(64),
-  'joining-manager@example.test': '6'.repeat(64)
+  'joining-manager@example.test': '6'.repeat(64),
+  'cover@example.test': '7'.repeat(64)
 };

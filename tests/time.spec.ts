@@ -23,3 +23,14 @@ test('rota weeks use configured first day and include shorter and longer DST day
   expect(fall.start).toBe('2026-10-25');
   expect(Date.parse(fall.days[0].to) - Date.parse(fall.days[0].from)).toBe(25 * 3600000);
 });
+
+test('calendar month uses the configured first day and local DST boundaries', async () => {
+  const { rotaMonth } = await import('../src/time');
+  const march = rotaMonth('2026-03', 'Europe/London', 1);
+  expect(march.leading).toBe(6);
+  expect(march.days).toHaveLength(31);
+  expect(march.leading + march.days.length + march.trailing).toBe(42);
+  expect(march.previous).toBe('2026-02');
+  const transition = march.days[28];
+  expect(Date.parse(transition.to) - Date.parse(transition.from)).toBe(23 * 3600000);
+});

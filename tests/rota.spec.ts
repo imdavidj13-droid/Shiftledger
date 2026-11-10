@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { employeeEmail, fixtureSessions, managerEmail, ownerEmail, password } from './fixtures.mjs';
+import { coverEmail, employeeEmail, fixtureSessions, managerEmail, ownerEmail, password } from './fixtures.mjs';
 
 const path = '/api/v1/organisations/shop/shifts';
 const session = (email: keyof typeof fixtureSessions) => ({ headers: { Cookie: 'sl_session=' + fixtureSessions[email] } });
@@ -70,4 +70,112 @@ test('mobile week and shift URLs support direct entry, publishing and refresh', 
   await expect(page.getByRole('link', { name: /Shared employee/ })).toBeVisible();
   await expect(page).toHaveURL(/\/schedule\?week=2031-11-03&location=north$/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+});
+
+test('monthly grid shows real shifts and overflow, with branch-filtered day and shift links', async ({ page, request, baseURL }) => {
+  const ids: string[] = [];
+  for (let index = 0; index < 3; index++) {
+    const response = await request.post(path, { ...owner, data: {
+      locationId: 'north', startsAt: '2032-02-29T0' + (index + 6) + ':00:00Z', endsAt: '2032-03-01T01:00:00Z'
+    } });
+    expect(response.status()).toBe(201);
+    ids.push((await response.json()).shift.id);
+  }
+  const south = await request.post(path, { ...owner, data: {
+    locationId: 'south', startsAt: '2032-02-29T12:00:00Z', endsAt: '2032-02-29T15:00:00Z'
+  } });
+  expect(south.status()).toBe(201);
+
+  await page.context().addCookies([{ name: 'sl_session', value: fixtureSessions[ownerEmail], url: baseURL! }]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/app/shop/schedule?week=2032-02-23&location=north');
+  await page.getByRole('link', { name: 'Month', exact: true }).click();
+  await expect(page).toHaveURL(/view=month&month=2032-02&location=north$/);
+  await expect(page.getByRole('heading', { name: 'Monthly rota' })).toBeVisible();
+  await expect(page.locator('.rota-view-month .rota-day')).toHaveCount(29);
+  const leapDay = page.locator('.rota-day').filter({ has: page.getByRole('link', { name: /View.*29/ }) });
+  await expect(leapDay.locator('.rota-shift')).toHaveCount(2);
+  await expect(leapDay.getByText('+1 more')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+
+  await leapDay.locator('.rota-shift').first().click();
+  await expect(page).toHaveURL(new RegExp('/schedule/' + ids[0] + '\\?view=month'));
+  await expect(page.getByRole('heading', { name: 'Edit draft shift' })).toBeVisible();
+  await page.getByRole('link', { name: 'Back to rota' }).click();
+  await leapDay.getByRole('link', { name: /3 shifts/ }).click();
+  await expect(page).toHaveURL(/view=day&date=2032-02-29&location=north$/);
+  await expect(page.getByRole('heading', { name: 'Daily rota' })).toBeVisible();
+  await expect(page.locator('.rota-shift')).toHaveCount(3);
+  await page.reload();
+  await expect(page.locator('.rota-shift')).toHaveCount(3);
+  await page.getByRole('link', { name: 'Next day' }).click();
+  await expect(page.locator('.rota-shift')).toHaveCount(3);
+  await expect(page.getByText('Continues from previous day')).toHaveCount(3);
+  await page.goBack();
+  await expect(page).toHaveURL(/date=2032-02-29&location=north$/);
+  await page.getByRole('link', { name: 'Month', exact: true }).click();
+  await page.getByRole('link', { name: 'Next month' }).click();
+  await expect(page).toHaveURL(/month=2032-03&location=north$/);
+  await expect(page.getByText(/March 2032/)).toBeVisible();
+});
+
+test('open shifts require explicit marking and serialise competing claims and approvals', async ({ request }) => {
+  const startsAt = '2037-05-08T09:00:00Z', endsAt = '2037-05-08T17:00:00Z';
+  const data = { locationId: 'south', startsAt, endsAt };
+  const draft = await request.post(path, { ...owner, data });
+  expect(draft.status()).toBe(201);
+  const detail = path + '/' + (await draft.json()).shift.id;
+  const claimPath = detail + '/claims';
+  expect((await request.post(detail + '/publish', { ...owner, data: { revision: 1 } })).status()).toBe(422);
+  expect((await request.patch(detail, { ...owner, data: { ...data, revision: 1, employeeId: 'shared', isOpen: true } })).status()).toBe(422);
+  expect((await request.patch(detail, { ...owner, data: { ...data, revision: 1, isOpen: true } })).status()).toBe(200);
+  expect((await request.post(claimPath, employee)).status()).toBe(404);
+  expect((await request.post(detail + '/publish', { ...owner, data: { revision: 2 } })).status()).toBe(200);
+
+  expect((await request.get(detail, employee)).status()).toBe(200);
+  expect((await request.get(claimPath, employee)).status()).toBe(403);
+  expect((await request.get(claimPath, manager)).status()).toBe(404);
+  const claimants = [employee, session(coverEmail)];
+  const responses = await Promise.all(claimants.map(auth => request.post(claimPath, auth)));
+  expect(responses.map(response => response.status()).sort()).toEqual([201, 409]);
+  const winner = responses.findIndex(response => response.status() === 201);
+  const first = (await responses[winner].json()).claim;
+  expect((await request.post(claimPath + '/' + first.id + '/approve', manager)).status()).toBe(404);
+  expect((await request.post(claimPath + '/' + first.id + '/decline', owner)).status()).toBe(200);
+
+  const newClaim = await request.post(claimPath, employee);
+  expect(newClaim.status()).toBe(201);
+  const next = (await newClaim.json()).claim;
+  const overlapping = await request.post(path, { ...owner, data: { ...data, locationId: 'north', employeeId: 'shared' } });
+  expect(overlapping.status()).toBe(201);
+  const conflict = (await overlapping.json()).shift;
+  const approve = claimPath + '/' + next.id + '/approve';
+  expect((await request.post(approve, owner)).status()).toBe(409);
+  expect((await request.post(path + '/' + conflict.id + '/discard', { ...owner, data: { revision: 1 } })).status()).toBe(200);
+  const decisions = await Promise.all([1, 2].map(() => request.post(approve, owner)));
+  expect(decisions.map(response => response.status()).sort()).toEqual([200, 409]);
+  expect((await (await request.get(detail, employee)).json()).shift).toMatchObject({ employee_id: 'shared', is_open: 0, revision: 4 });
+  expect((await request.get(detail, claimants[1])).status()).toBe(404);
+  expect((await (await request.get(claimPath, owner)).json()).claims.map(({ status }) => status).sort()).toEqual(['approved', 'declined']);
+});
+
+test('manager creates an open shift and reviews a real claim from the calendar', async ({ page, request, baseURL }) => {
+  await page.context().addCookies([{ name: 'sl_session', value: fixtureSessions[managerEmail], url: baseURL! }]);
+  await page.goto('/app/shop/schedule?view=day&date=2037-06-10&location=north');
+  await page.getByRole('link', { name: 'Create draft shift' }).click();
+  await page.getByLabel('Mark as an open shift').check();
+  await expect(page.getByRole('combobox', { name: 'Employee', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Create draft', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Open shift draft', exact: true })).toBeVisible();
+  const id = new URL(page.url()).pathname.split('/').at(-1);
+  await page.getByRole('button', { name: 'Publish shift' }).click();
+  await expect(page.getByRole('heading', { name: 'Open shift', exact: true })).toBeVisible();
+  expect((await request.post(path + '/' + id + '/claims', employee)).status()).toBe(201);
+  await page.getByRole('link', { name: 'Back to rota' }).click();
+  await page.getByRole('link', { name: 'Month', exact: true }).click();
+  await expect(page.getByRole('link', { name: /1 open shifts/ })).toBeVisible();
+  await page.getByRole('link', { name: /Open shift.*published/ }).click();
+  await page.getByRole('button', { name: 'Approve claim' }).click();
+  await expect(page.getByText('approved', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Shared employee' })).toBeVisible();
 });
