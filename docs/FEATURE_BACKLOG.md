@@ -126,7 +126,8 @@ See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope an
 - [ ] Activate production timesheets with migration 0008. Add saved pay periods, period-wide approvals, a controlled reopen workflow, rounding, payroll cutoffs and reproducible exports.
 - [x] Management leave list, request entry, review, approval, decline and cancellation. Staff API for their own requests, and branch time zone and shift conflict checks. Verified locally.
 - [ ] Activate leave with production migration 0007. Finish availability and exceptions, configurable leave types, balances/accrual and holiday calendars.
-- [ ] Shift swaps, offers, eligibility, staff requests and approvals; cross-branch eligibility and permission enforcement.
+- [x] Employee swap requests and recipient consent through the API. Management can record agreed swaps, review, approve, decline or cancel. D1 verifies both branches and reassigns both shifts atomically.
+- [ ] Activate production swaps with migration 0009. Add broader shift offers, notifications and coverage management.
 - [ ] Absence alerts and staffing gaps with appropriate privacy boundaries.
 
 **P3 acceptance:** clock -> edit -> approve -> export with audit trail; leave and swaps affect schedule conflict checks; manager cannot approve unauthorised employees.

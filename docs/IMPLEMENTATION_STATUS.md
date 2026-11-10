@@ -17,7 +17,10 @@ Updated 10 November 2026. The master roadmap remains [FEATURE_BACKLOG.md](FEATUR
 - [Weekly repeats, copy-week and bulk publication (493164f)](https://github.com/imdavidj13-droid/Shiftledger/commit/493164f09b5e33d064c0bf5e8d2373a439e687d8) passed [GitHub Actions](https://github.com/imdavidj13-droid/Shiftledger/actions/runs/42786147604). The live site served matching assets.
 - Bulk rota validation passed `npm run verify` (34 tests) and the Wrangler production dry-run. No new migration is required for bulk rota changes.
 - Staff timekeeping API records clock-in, clock-out and paid/unpaid breaks. Managers can correct missed punches and break ends with reasons, compare paid hours with linked rota assignments, and approve and lock individual timesheets. The UI includes branch, date and status filters and audit history.
+- [Timesheets (d008897)](https://github.com/imdavidj13-droid/Shiftledger/commit/d008897122bce237cec22b2633eef7e6e23f49f7) passed [GitHub Actions](https://github.com/imdavidj13-droid/Shiftledger/actions/runs/42787037581).
 - Timekeeping passed `npm run verify` (37 tests) and the Wrangler production dry-run. Migration `0008_timekeeping.sql` is additive and awaits production approval. Pay periods, approved-record reopening and rounding rules remain open.
+- Shift swaps have management list, detail and review screens. Staff API offers require the second employee to consent. Managers can record consent already given by both employees. Approval rechecks access to both branches, shift revisions, employee assignments, overlaps and approved leave before updating both shifts in one D1 transaction.
+- Swap validation passed `npm run verify` (39 tests) and Wrangler production dry-run. Migration `0009_shift_swaps.sql` awaits production approval.
 - Leave balances, availability/position eligibility, notification delivery, editable recurring series, reusable templates and remaining P0–P3 release gates are still open. Hosted staging is outside the current deployment policy.
 
 ## Verified in local Workers and D1

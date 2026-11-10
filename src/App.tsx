@@ -7,6 +7,7 @@ import { formatShiftTime } from './time';
 import { Rota, type Shift } from './Rota';
 import { Leave } from './Leave';
 import { Timesheets } from './Timesheets';
+import { Swaps } from './Swaps';
 import { Profile, type User } from './Profile';
 import { Invitations, JoinInvitation } from './Invitations';
 
@@ -279,7 +280,8 @@ function Dashboard({user,org,organisations,page,resourceId,locationFilter,onLogo
  {page==='Schedule'&&<Rota org={org} locations={locations} employees={employees} assignments={employeeLocations} locationFilter={locationFilter} resourceId={resourceId} openShifts={openShifts}/>}
  {page==='Leave'&&<Leave org={org} locations={locations} employees={employees} assignments={employeeLocations} locationFilter={locationFilter} resourceId={resourceId}/>}
  {page==='Timesheets'&&<Timesheets org={org} locations={locations} employees={employees} assignments={employeeLocations} locationFilter={locationFilter} resourceId={resourceId}/>}
- {(['Shift swaps','Reports'] as Page[]).includes(page)&&<section className="panel"><div className="panel-title"><h2>{page} module</h2><span>Not enabled</span></div><Empty icon={<ShieldCheck size={33}/>} heading="Not yet available" description="This module will not accept or simulate employee data until its API, permissions and approval flow are implemented."/></section>}
+ {page==='Shift swaps'&&<Swaps org={org} locations={locations} employees={employees} assignments={employeeLocations} locationFilter={locationFilter} resourceId={resourceId}/>}
+ {page==='Reports'&&<section className="panel"><div className="panel-title"><h2>{page} module</h2><span>Not enabled</span></div><Empty icon={<ShieldCheck size={33}/>} heading="Not yet available" description="This module will not accept or simulate employee data until its API, permissions and approval flow are implemented."/></section>}
  </>}
  <footer>© ShiftLedger · Real organisation data · No simulated statistics</footer></main></div></div>;
 }

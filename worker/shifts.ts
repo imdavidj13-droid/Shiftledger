@@ -157,7 +157,8 @@ export function registerShifts(app: Hono<Env>) {
   app.get(path, async c => {
     const openShifts = await openShiftSchema(c);
     const access = scope(c, openShifts), location = c.req.query('location');
-    const fromValue = c.req.query('from'), toValue = c.req.query('to'), cursor = c.req.query('cursor');
+    const { from: fromValue, to: toValue, cursor, status } = c.req.query();
+    if (status && !['draft','published','cancelled'].includes(status)) return fail(c,'Invalid shift status.',422);
     const from = utc(fromValue), to = utc(toValue);
     if ((fromValue || toValue) && (!from || !to || from >= to || Date.parse(to) - Date.parse(from) > 32*86400000)) {
       return fail(c,'Provide a valid time range up to 32 days.',422);
@@ -165,6 +166,7 @@ export function registerShifts(app: Hono<Env>) {
     const args: string[] = [c.get('organisationId'), ...access.bindings];
     let sql = selectShift(openShifts) + ' WHERE s.organisation_id=?' + access.sql;
     if (location) { sql += ' AND s.location_id=?'; args.push(location); }
+    if (status) { sql += ' AND s.status=?'; args.push(status); }
     if (from && to) { sql += ' AND s.starts_at_utc<? AND s.ends_at_utc>?'; args.push(to,from); }
     if (cursor) {
       const [instant,id,extra] = cursor.split('|');

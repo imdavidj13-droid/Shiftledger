@@ -3,9 +3,11 @@ import { orgAdmin, type ApiContext } from './http';
 export const canManage = (c: ApiContext) => orgAdmin(c) || c.get('role') === 'manager';
 
 export const locationPermission = (org: string, location: string, user: string) => `EXISTS (
-  SELECT 1 FROM memberships m WHERE m.organisation_id=${org} AND m.user_id=${user} AND m.status='active'
-  AND (m.role IN ('owner','admin') OR (m.role='manager' AND EXISTS
-    (SELECT 1 FROM location_access a WHERE a.organisation_id=${org} AND a.location_id=${location} AND a.user_id=${user}))))`;
+  SELECT 1 FROM memberships m LEFT JOIN location_access permitted_branch
+    ON permitted_branch.organisation_id=m.organisation_id AND permitted_branch.user_id=m.user_id
+    AND permitted_branch.location_id=${location}
+  WHERE m.organisation_id=${org} AND m.user_id=${user} AND m.status='active'
+  AND (m.role IN ('owner','admin') OR (m.role='manager' AND permitted_branch.user_id IS NOT NULL)))`;
 
 export const staffEligible = (org: string, location: string, employee: string) => `EXISTS (
   SELECT 1 FROM employee_locations el JOIN employees eligible_employee

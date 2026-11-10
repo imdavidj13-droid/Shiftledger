@@ -45,7 +45,7 @@ function calendarQuery(view: CalendarView, date: string) {
   return new URLSearchParams(view === 'month' ? { view, month: date } : { view, date });
 }
 
-async function loadShifts(base: string, query: URLSearchParams, paginate: boolean, signal: AbortSignal): Promise<ShiftPage> {
+export async function loadShifts(base: string, query: URLSearchParams, paginate: boolean, signal: AbortSignal): Promise<ShiftPage> {
   const first = await api<ShiftPage>(base + '?' + query, { signal });
   if (paginate) return first;
   const shifts = first.shifts;

@@ -15,7 +15,7 @@ export function parseWorkspace(pathname: string) {
   if (!match) return null;
   const [, organisationId, slug = 'overview', resourceId] = match;
   const page = (Object.keys(PAGE_SLUGS) as Page[]).find(page => PAGE_SLUGS[page] === slug);
-  if (!page || (resourceId && !['Locations', 'Schedule', 'Leave', 'Timesheets'].includes(page))) return null;
+  if (!page || (resourceId && !['Locations', 'Schedule', 'Leave', 'Timesheets', 'Shift swaps'].includes(page))) return null;
   return { organisationId, page, resourceId };
 }
 
