@@ -168,14 +168,14 @@ function Onboard({refresh}:{refresh:()=>void}){
  const [orgName,setOrgName]=useState(''),[industry,setIndustry]=useState(''),[teamSize,setTeamSize]=useState('');
  const [country,setCountry]=useState('GB'),[currency,setCurrency]=useState('GBP'),[zone,setZone]=useState(initialZone);
  const [weekStart,setWeekStart]=useState(1),[timeFormat,setTimeFormat]=useState('24h');
- const [multiLocation,setMultiLocation]=useState(false),[firstLocation,setFirstLocation]=useState('');
+ const [multiLocation,setMultiLocation]=useState(false),[locationNames,setLocationNames]=useState<string[]>(['']);
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
  const goNext=(e:FormEvent)=>{e.preventDefault();setError('');setStep(previous=>Math.min(3,previous+1));};
  function selectCountry(next:string){setCountry(next);const preset=countries.find(c=>c.code===next);if(preset){setCurrency(preset.currency);setZone(preset.zone);}}
  async function create(e:FormEvent){
    e.preventDefault();setBusy(true);setError('');
    try {
-    await post('/organisations',{name:orgName,countryCode:country,currencyCode:currency,timeZone:zone,industry:industry||null,teamSize:teamSize||null,weekStart,timeFormat,...(firstLocation.trim()?{firstLocation:firstLocation.trim()}:{})});
+    await post('/organisations',{name:orgName,countryCode:country,currencyCode:currency,timeZone:zone,industry:industry||null,teamSize:teamSize||null,weekStart,timeFormat,locations:multiLocation?locationNames.map(n=>n.trim()):locationNames[0]?.trim()?[locationNames[0].trim()]:[]});
     refresh();
    }catch(err){setError((err as Error).message)}finally{setBusy(false)}
  }
@@ -204,9 +204,15 @@ function Onboard({refresh}:{refresh:()=>void}){
    </form>}
    {step===3&&<form className="form-stack" onSubmit={create}>
     <div className="workspace-choice"><Building2 size={23}/><div><strong>{orgName}</strong><span>{country} · {currency} · {zone}</span></div></div>
-    <Field label="Location setup"><select value={multiLocation?'multiple':'single'} onChange={e=>setMultiLocation(e.target.value==='multiple')}><option value="single">One location for now</option><option value="multiple">Multiple locations / branches</option></select></Field>
-    <p className="onboard-hint">{multiLocation?'Your branches will all use this same account. Start with one location, then add the others from Settings.':'You can add more locations later without creating another organisation.'}</p>
-    <Field label="First location name (optional)"><input value={firstLocation} onChange={e=>setFirstLocation(e.target.value)} maxLength={100} placeholder="e.g. City Centre Branch"/></Field>
+    <Field label="Location setup"><select value={multiLocation?'multiple':'single'} onChange={e=>{const multiple=e.target.value==='multiple';setMultiLocation(multiple);setLocationNames(previous=>multiple&&previous.length===1?[previous[0],'']:previous);}}><option value="single">One location for now</option><option value="multiple">Multiple locations / branches</option></select></Field>
+    <p className="onboard-hint">{multiLocation?'Add up to 20 branches now. They will all share your organisation account, staff directory and subscription.':'You can add more locations later without creating another organisation.'}</p>
+    {multiLocation?<div className="form-stack">
+      {locationNames.map((locationName,index)=><div className="location-setup-row" key={index}>
+        <Field label={'Branch '+(index+1)}><input required minLength={2} maxLength={100} value={locationName} onChange={e=>setLocationNames(prev=>prev.map((n,i)=>i===index?e.target.value:n))} placeholder="e.g. City Centre Branch"/></Field>
+        {locationNames.length>1&&<button type="button" className="btn outline" onClick={()=>setLocationNames(prev=>prev.filter((_,i)=>i!==index))}>Remove</button>}
+      </div>)}
+      {locationNames.length<20&&<button type="button" className="btn outline" onClick={()=>setLocationNames(prev=>[...prev,''])}><Plus size={17}/> Add another branch</button>}
+    </div>:<Field label="First location name (optional)"><input value={locationNames[0]||''} onChange={e=>setLocationNames([e.target.value])} maxLength={100} placeholder="e.g. City Centre Branch"/></Field>}
     <div className="onboard-actions"><button type="button" className="btn outline" onClick={()=>setStep(2)}>Back</button><button className="btn primary" disabled={busy}>{busy?'Creating…':'Create organisation'} <ArrowRight size={18}/></button></div>
    </form>}
   </section>
