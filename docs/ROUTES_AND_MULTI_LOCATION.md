@@ -26,6 +26,7 @@ Platform > Organisations > Locations > Employees and shifts.
 
 - One business = one organisation with one owner and one prospective subscription. Adding a branch must never create another subscription.
 - A business can have zero, one or many locations; each location has its own IANA time zone.
+- An owner can filter the workspace to all locations or a particular branch. The selected location is represented as `?location=<locationId>` on the existing permanent module URL.
 - One organisation contains shared employee identities. Employee-location assignment is many-to-many, so a person working at two sites is **not** entered twice.
 - Owners and org admins see organisation-wide data. Managers may have multiple assigned locations.
 - Branch managers do not implicitly gain access to every site in the business.
@@ -70,7 +71,7 @@ Not implemented yet: inviting users as organisation members, granting manager ro
 4. From Settings, add another location and confirm all branches appear in the directory.
 5. Create an employee once and assign that employee to **both** locations in the Team screen.
 6. Create shifts for that employee at each location.
-7. Refresh a module deep link and confirm the same page opens without returning to Overview.
+7. Refresh a module deep link (e.g. `/app/<orgId>/schedule?location=<locationId>`) and confirm the same page and branch filter open without returning to Overview.
 8. Use back/forward browser history; open links in a new tab; switch organisation if available.
 9. Test manager scope with a real separately invited manager once invitations are implemented.
 10. Cross-tenant automated tests must confirm inaccessible IDs cannot be read, assigned or scheduled.
@@ -80,3 +81,6 @@ This is infrastructure plus the first usable forms. Full multi-location manageme
 
 ## Initial multi-location setup
 The three-step onboarding allows a business to create up to 20 named locations in the first transaction; after setup, an owner/admin can add further sites from Settings. Each site uses the organisation's default time zone at creation; independent site time zones are supported through the location API and planned location editing UI. The employee assignment UI allows the same employee to belong to multiple locations. The branch manager assignment API exists, but a complete invitations and manager-management UI is not yet available.
+
+## Deep links when signed out
+Opening a workspace URL while signed out redirects to the sign-in view with a local `next` destination. After login the app restores the authorised route and optional branch filter; it never trusts this URL for authorisation. Backend organisation membership and location assignments are still mandatory.
