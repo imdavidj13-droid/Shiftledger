@@ -50,3 +50,8 @@
 .employee-row{flex:1;min-width:0}
 .employee-row select{margin-top:10px;max-width:340px;font-size:12px;min-height:38px;padding:8px;background:#fff}
 .employee-row small{line-height:1.5}
+
+.location-setup-row{display:flex;gap:12px;align-items:flex-end}
+.location-setup-row .field{flex:1;min-width:0}
+.location-setup-row .btn{flex:none}
+@media(max-width:600px){.location-setup-row{flex-direction:column;align-items:stretch}}
