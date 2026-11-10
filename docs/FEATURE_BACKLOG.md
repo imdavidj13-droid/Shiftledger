@@ -1,6 +1,42 @@
 # ShiftLedger — Master product roadmap and execution plan
 Updated 10 November 2026. This is the primary implementation backlog for ChatGPT Work and future development sessions. Align with docs/PRODUCT_BLUEPRINT.md, DESIGN_SYSTEM.md, ROUTES_AND_MULTI_LOCATION.md, AUTH_UX_FLOW.md and REGISTRATION_TEST_PLAN.md.
 
+## ACTIVE DEVELOPMENT MILESTONE — 100% P0 THROUGH P3
+
+**Owner directive, 10 November 2026:** Finish **all** requirements in P0, P1, P2 and P3 to verified, usable completion before progressing to P4–P6. Do not treat an implemented shell, checked checkbox or visually complete page as finished. Each feature must have real Cloudflare D1 persistence, authenticated and permissioned API operations, appropriate frontend flows, stable URLs, error/empty/loading states, and relevant automated tests. Maintain backward compatibility for existing user accounts and organisations. **All future GitHub commits go directly to `main`; do not create branches or pull requests unless explicitly requested.** Run build/typecheck/tests before each push, and stop on failing checks; avoid risky multi-feature commits. Changes to the production database, secrets or destructive operations require separate approval and backup. No separate staging account or database is requested.
+
+### P0 exit gate (all required)
+- Reproducible clean install, TypeScript check, production build and automated tests green on `main`; verify Cloudflare's actual deployed commit.
+- Browser refresh, direct URL, session preservation, account creation/verification/reset and log-out all work.
+- Organisation membership and branch access enforced on the server for every route, with cross-tenant/cross-branch negative tests.
+- D1 migrations, backup and restore runbook, safe roll-forward/recovery plan and non-destructive upgrades verified.
+- Rate limits, CSRF/origin policies, session expiration/revocation, audit events, request correlation, basic monitoring and accessible errors.
+- Stable, responsive, accessible opaque forest-green/lime/ivory UI. No false demo data in production.
+
+### P1 exit gate (all required)
+- Complete registration, login, email verification/resend, password reset, profile, account recovery, organisation onboarding/editing and safe account lifecycle.
+- Owners can invite, resend/revoke, grant/revoke admin/manager/employee roles, and manage active and suspended memberships with correct security.
+- Locations may be created, edited, archived/restored and assigned independent IANA time zones; managers may cover multiple permitted branches.
+- Employee profiles, employment state, department/position, staff import (if scoped), shared staff identity across locations and assignment rules function end-to-end.
+- Every action is reflected in D1 after reload and correctly scoped for owner/admin/manager/employee; all detail screens have durable URLs.
+
+### P2 exit gate (all required)
+- Week/day/month rota views; create/edit/duplicate/delete draft shifts; shift templates, copy-week, multi-shift operations and recurring patterns.
+- Publish/revise/cancel individual and bulk schedules with versioned audit trail, employee visibility and idempotent notification delivery or accurately documented blocked provider-dependent delivery.
+- Conflict checks for overlapping shifts *across locations*, approved leave, unavailability, scheduling constraints, breaks and configurable rest/overtime warnings; avoid universal legal-compliance claims.
+- Open/unassigned shifts and eligibility/approval workflows; staff self-service schedules, branch filters and appropriate export/calendar access.
+- Time zones and DST handled by actual tests, including skipped/repeated local hours. Responsive rota UI and clear empty/errors.
+
+### P3 exit gate (all required)
+- Clock in/out and break recording, corrections/missed punches, reason codes, approvals, locked timesheets and full audit provenance.
+- Pay-period and branch-scoped timesheet views, scheduled-versus-actual hour calculations, timezone-aware rounding rules and manager approval flows.
+- Staff availability rules/exceptions; leave types, requests, approvals/rejections, balances where jurisdictionally supported, organisation leave settings and leave-vs-shift warnings.
+- Shift swap offers/requests, eligibility and cross-location permission checks, manager approvals and coverage/gap alerts.
+- Relevant email/in-app notifications, staff self-service pages, responsive design and tests for fraud/role bypass, race conditions, double punch, overlapping leave/swap and international time zones.
+
+### Completion policy
+Track every individually verified item in `docs/IMPLEMENTATION_STATUS.md`, including test command/output, commit and deployment status. Phase is **not 100%** if a required operation still relies on fake data, an unimplemented endpoint, an untested migration, a broken mobile flow, or an unauthorised access path. Distinguish external service configuration (e.g. email delivery) from implemented capability and keep it explicitly blocked until verified. P4–P6 remain on the roadmap but are not the current milestone.
+
 ## Mission and locked product decisions
 Deliver a commercially viable, web-first, international multi-tenant workforce management SaaS for SMBs/SMEs, with native mobile apps later. One business is one organisation; one organisation can have many locations, shared employees, managers and settings, under one proposed flat-fee subscription. Proposed low-cost £5/£10/£15 tiers are hypotheses, not final promises; test unit economics and fair-use boundaries before offering them. Keep the scope focused on scheduling, staff, timesheets, leave, swaps and payroll-hours export. Public API from the foundation, rather than retrofitting it later.
 
