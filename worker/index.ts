@@ -226,13 +226,20 @@ app.get('/api/v1/organisations',async c=>{
 app.post('/api/v1/organisations',async c=>{
   const u=await currentUser(c);if(!u)return fail(c,'Sign in required',401);
   const x=await body(c),name=safeStr(x?.name,100),country=safeStr(x?.countryCode,2).toUpperCase(),currency=safeStr(x?.currencyCode,3).toUpperCase(),zone=safeStr(x?.timeZone,64);
+  const industry=safeStr(x?.industry,60)||null,teamSize=safeStr(x?.teamSize,20)||null;
+  const weekStart=x?.weekStart??1,timeFormat=x?.timeFormat??'24h';
+  const firstLocation=safeStr(x?.firstLocation,100);
+  if(![0,1,6].includes(weekStart)||!['12h','24h'].includes(timeFormat))return fail(c,'Invalid scheduling preferences',422);
+  if(x?.firstLocation!==undefined&&firstLocation.length<2)return fail(c,'First location must have at least two characters',422);
   if(name.length<2||!/^[A-Z]{2}$/.test(country)||!/^[A-Z]{3}$/.test(currency)||!validZone(zone))return fail(c,'Provide an organisation name, ISO country/currency codes and a valid IANA time zone.',422);
   const id=crypto.randomUUID(),slug=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,42)+'-'+id.slice(0,8);
-  await c.env.DB.batch([
-    c.env.DB.prepare('INSERT INTO organisations(id,name,slug,country_code,currency_code,time_zone) VALUES(?,?,?,?,?,?)').bind(id,name,slug,country,currency,zone),
+  const writes=[
+    c.env.DB.prepare('INSERT INTO organisations(id,name,slug,country_code,currency_code,time_zone,industry,team_size_band,week_start,time_format) VALUES(?,?,?,?,?,?,?,?,?,?)').bind(id,name,slug,country,currency,zone,industry,teamSize,weekStart,timeFormat),
     c.env.DB.prepare("INSERT INTO memberships(organisation_id,user_id,role,status) VALUES(?,?,'owner','active')").bind(id,u.id),
     c.env.DB.prepare('INSERT INTO audit_events(id,organisation_id,actor_user_id,action,resource_type,resource_id) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),id,u.id,'create','organisation',id)
-  ]);
+  ];
+  if(firstLocation)writes.push(c.env.DB.prepare('INSERT INTO locations(id,organisation_id,name,time_zone) VALUES(?,?,?,?)').bind(crypto.randomUUID(),id,firstLocation,zone));
+  await c.env.DB.batch(writes);
   return c.json({organisation:{id,name,slug,country_code:country,currency_code:currency,time_zone:zone,role:'owner'}},201);
 });
 app.get('/api/v1/organisations/:orgId',async c=>{
@@ -245,10 +252,14 @@ app.get('/api/v1/organisations/:orgId/members',async c=>{
   return c.json({members:rows.results});
 });
 app.get('/api/v1/organisations/:orgId/locations',async c=>{
-  const rows=await c.env.DB.prepare('SELECT id,name,time_zone FROM locations WHERE organisation_id=? AND archived_at IS NULL ORDER BY name').bind(c.get('organisationId')).all();return c.json({locations:rows.results});
+  const org=c.get('organisationId'),role=c.get('role'),user=c.get('userId');
+  const rows=role==='owner'||role==='admin'
+    ?await c.env.DB.prepare('SELECT id,name,time_zone FROM locations WHERE organisation_id=? AND archived_at IS NULL ORDER BY name').bind(org).all()
+    :await c.env.DB.prepare('SELECT l.id,l.name,l.time_zone FROM locations l JOIN location_access a ON a.organisation_id=l.organisation_id AND a.location_id=l.id WHERE l.organisation_id=? AND a.user_id=? AND l.archived_at IS NULL ORDER BY l.name').bind(org,user).all();
+  return c.json({locations:rows.results});
 });
 app.post('/api/v1/organisations/:orgId/locations',async c=>{
-  if(!['owner','admin','manager'].includes(c.get('role')))return fail(c,'Not permitted',403);
+  if(!['owner','admin'].includes(c.get('role')))return fail(c,'Only organisation owners and admins may create locations.',403);
   const x=await body(c),name=safeStr(x?.name,100),zone=safeStr(x?.timeZone,64);
   if(name.length<2||!validZone(zone))return fail(c,'Location name and valid time zone required',422);
   const id=crypto.randomUUID(),org=c.get('organisationId');
@@ -257,11 +268,13 @@ app.post('/api/v1/organisations/:orgId/locations',async c=>{
 });
 app.get('/api/v1/organisations/:orgId/employees',async c=>{
   if(!['owner','admin','manager'].includes(c.get('role')))return fail(c,'Not permitted',403);
-  const rows=await c.env.DB.prepare('SELECT id,display_name,employment_status FROM employees WHERE organisation_id=? ORDER BY display_name').bind(c.get('organisationId')).all();
+  const rows=c.get('role')==='manager'
+    ?await c.env.DB.prepare('SELECT DISTINCT e.id,e.display_name,e.employment_status FROM employees e JOIN employee_locations el ON el.organisation_id=e.organisation_id AND el.employee_id=e.id JOIN location_access a ON a.organisation_id=el.organisation_id AND a.location_id=el.location_id WHERE e.organisation_id=? AND a.user_id=? ORDER BY e.display_name').bind(c.get('organisationId'),c.get('userId')).all()
+    :await c.env.DB.prepare('SELECT id,display_name,employment_status FROM employees WHERE organisation_id=? ORDER BY display_name').bind(c.get('organisationId')).all();
   return c.json({employees:rows.results});
 });
 app.post('/api/v1/organisations/:orgId/employees',async c=>{
-  if(!['owner','admin','manager'].includes(c.get('role')))return fail(c,'Not permitted',403);
+  if(!['owner','admin'].includes(c.get('role')))return fail(c,'Only organisation owners and admins can add staff until location assignments are enabled.',403);
   const x=await body(c),name=safeStr(x?.name,100);if(name.length<2)return fail(c,'Employee name required',422);
   const id=crypto.randomUUID(),org=c.get('organisationId');
   await c.env.DB.prepare('INSERT INTO employees(id,organisation_id,display_name) VALUES(?,?,?)').bind(id,org,name).run();
@@ -269,8 +282,10 @@ app.post('/api/v1/organisations/:orgId/employees',async c=>{
 });
 app.get('/api/v1/organisations/:orgId/shifts',async c=>{
   const org=c.get('organisationId'),role=c.get('role');
-  if(!['owner','admin','manager'].includes(role))return fail(c,'Only managers can view the full rota',403);
-  const rows=await c.env.DB.prepare('SELECT id,location_id,employee_id,starts_at_utc,ends_at_utc,unpaid_break_minutes,status FROM shifts WHERE organisation_id=? ORDER BY starts_at_utc DESC LIMIT 200').bind(org).all();
+  if(!['owner','admin','manager'].includes(role))return fail(c,'Only managers can view rota data',403);
+  const rows=role==='manager'
+    ?await c.env.DB.prepare('SELECT s.id,s.location_id,s.employee_id,s.starts_at_utc,s.ends_at_utc,s.unpaid_break_minutes,s.status FROM shifts s JOIN location_access a ON a.organisation_id=s.organisation_id AND a.location_id=s.location_id WHERE s.organisation_id=? AND a.user_id=? ORDER BY s.starts_at_utc DESC LIMIT 200').bind(org,c.get('userId')).all()
+    :await c.env.DB.prepare('SELECT id,location_id,employee_id,starts_at_utc,ends_at_utc,unpaid_break_minutes,status FROM shifts WHERE organisation_id=? ORDER BY starts_at_utc DESC LIMIT 200').bind(org).all();
   return c.json({shifts:rows.results});
 });
 app.post('/api/v1/organisations/:orgId/shifts',async c=>{
@@ -281,6 +296,10 @@ app.post('/api/v1/organisations/:orgId/shifts',async c=>{
   const id=crypto.randomUUID(),org=c.get('organisationId');
   const loc=await c.env.DB.prepare('SELECT id FROM locations WHERE organisation_id=? AND id=? AND archived_at IS NULL').bind(org,location).first();
   if(!loc)return fail(c,'Location not found',404);
+  if(c.get('role')==='manager') {
+    const access=await c.env.DB.prepare('SELECT 1 FROM location_access WHERE organisation_id=? AND location_id=? AND user_id=?').bind(org,location,c.get('userId')).first();
+    if(!access)return fail(c,'You do not manage this location',403);
+  }
   if(employee){const emp=await c.env.DB.prepare("SELECT id FROM employees WHERE organisation_id=? AND id=? AND employment_status='active'").bind(org,employee).first();if(!emp)return fail(c,'Employee not found',404);}
   await c.env.DB.prepare('INSERT INTO shifts(id,organisation_id,location_id,employee_id,starts_at_utc,ends_at_utc,unpaid_break_minutes) VALUES(?,?,?,?,?,?,?)').bind(id,org,location,employee,new Date(start).toISOString(),new Date(end).toISOString(),breaks).run();
   return c.json({shift:{id,status:'draft'}},201);
