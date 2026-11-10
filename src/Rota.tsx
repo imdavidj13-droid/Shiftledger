@@ -43,34 +43,41 @@ export function Rota(props: Props) {
   const [loadedPath, setLoadedPath] = useState('');
   const [error, setError] = useState('');
   const cursor = route.searchParams.get('cursor');
+  const copyId = resourceId === 'new' ? route.searchParams.get('copy') : null;
+  const copyEndpoint = copyId ? base + '/' + encodeURIComponent(copyId) : null;
   const query = new URLSearchParams({ from: week.days[0].from, to: week.days[6].to });
   if (locationFilter) query.set('location', locationFilter);
   if (cursor) query.set('cursor', cursor);
   const endpoint = resourceId ? base + '/' + resourceId : base + '?' + query;
 
   useEffect(() => {
-    if (resourceId === 'new') return;
+    if (resourceId === 'new' && !copyEndpoint) return;
     let active = true;
     setError('');
     if (resourceId) {
-      void api<{ shift: Shift }>(endpoint).then(data => { if (active) setRecord(data.shift); })
-        .catch(reason => { if (active) setError(reason.message); }).finally(() => { if (active) setLoadedPath(endpoint); });
+      const source = copyEndpoint || endpoint;
+      void api<{ shift: Shift }>(source).then(data => { if (active) setRecord(data.shift); })
+        .catch(reason => { if (active) setError(reason.message); }).finally(() => { if (active) setLoadedPath(source); });
     } else {
       void api<{ shifts: Shift[]; nextCursor: string | null }>(endpoint).then(data => { if (active) setResult(data); })
         .catch(reason => { if (active) setError(reason.message); }).finally(() => { if (active) setLoadedPath(endpoint); });
     }
     return () => { active = false; };
-  }, [endpoint, resourceId]);
+  }, [endpoint, resourceId, copyEndpoint]);
 
   if (resourceId === 'new') return <><a className="btn outline" href={href()}>Back to rota</a>
-    {manage ? <ShiftEditor {...props} endpoint={base} onSaved={id => go(href(id), true)}/> :
-      <p className="alert error" role="alert">Only schedulers can create shifts.</p>}</>;
+    {!manage ? <p className="alert error" role="alert">Only schedulers can create shifts.</p> :
+      copyEndpoint && loadedPath !== copyEndpoint ? <p role="status">Loading shift template…</p> :
+      error ? <p className="alert error" role="alert">{error}</p> :
+      <ShiftEditor key={copyEndpoint || 'new'} {...props} endpoint={base} template={copyEndpoint ? record || undefined : undefined}
+        onSaved={id => go(href(id), true)}/>}</>;
   if (loadedPath !== endpoint) return <p role="status">Loading rota…</p>;
   if (error) return <><p className="alert error" role="alert">{error}</p><a className="btn outline" href={href()}>Back to rota</a></>;
 
   if (resourceId && record) return <><a className="btn outline" href={href()}>Back to rota</a>
     <ShiftDetails key={record.id + '/' + record.revision} record={record} org={org} manage={manage} endpoint={endpoint}
-      onChanged={async () => setRecord((await api<{ shift: Shift }>(endpoint)).shift)} onDiscard={() => go(href(), true)}/>
+      onChanged={async () => setRecord((await api<{ shift: Shift }>(endpoint)).shift)} onDiscard={() => go(href(), true)}
+      copyHref={href('new') + '&copy=' + encodeURIComponent(record.id)}/>
     {manage && record.status === 'draft' && <ShiftEditor key={record.id + '/' + record.revision}
       {...props} endpoint={endpoint} shift={record} onSaved={async () => setRecord((await api<{ shift: Shift }>(endpoint)).shift)}/>}</>;
 
@@ -106,8 +113,8 @@ export function Rota(props: Props) {
   </section>;
 }
 
-function ShiftDetails({ record, org, manage, endpoint, onChanged, onDiscard }: {
-  record: Shift; org: Org; manage: boolean; endpoint: string; onChanged: () => Promise<void>; onDiscard: () => void;
+function ShiftDetails({ record, org, manage, endpoint, onChanged, onDiscard, copyHref }: {
+  record: Shift; org: Org; manage: boolean; endpoint: string; onChanged: () => Promise<void>; onDiscard: () => void; copyHref: string;
 }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -128,6 +135,7 @@ function ShiftDetails({ record, org, manage, endpoint, onChanged, onDiscard }: {
       <div>{formatShiftTime(record.starts_at_utc, record.time_zone, org.time_format)} – {formatShiftTime(record.ends_at_utc, record.time_zone, org.time_format)}</div>
       <div>{record.unpaid_break_minutes} minutes unpaid break</div>
       {manage && <div className="rota-controls">
+        <a className="btn outline" href={copyHref}>Duplicate as draft</a>
         {record.status === 'draft' && <><button className="btn primary" disabled={busy} onClick={() => void change('publish')}>Publish shift</button>
           <button className="btn outline" disabled={busy} onClick={() => void change('discard')}>Discard draft</button></>}
         {record.status === 'published' && <button className="btn outline" disabled={busy} onClick={() => void change('cancel')}>Cancel shift</button>}
@@ -136,16 +144,17 @@ function ShiftDetails({ record, org, manage, endpoint, onChanged, onDiscard }: {
   </section>;
 }
 
-function ShiftEditor({ locations, employees, assignments, locationFilter, endpoint, shift, onSaved }: Props & {
-  endpoint: string; shift?: Shift; onSaved: (id: string) => void | Promise<void>;
+function ShiftEditor({ locations, employees, assignments, locationFilter, endpoint, shift, template, onSaved }: Props & {
+  endpoint: string; shift?: Shift; template?: Shift; onSaved: (id: string) => void | Promise<void>;
 }) {
-  const [locationId, setLocationId] = useState(shift?.location_id || locationFilter);
-  const [employeeId, setEmployeeId] = useState(shift?.employee_id || '');
-  const [start, setStart] = useState(shift ? branchWallTime(shift.starts_at_utc, shift.time_zone) : '');
-  const [end, setEnd] = useState(shift ? branchWallTime(shift.ends_at_utc, shift.time_zone) : '');
-  const [startOccurrence, setStartOccurrence] = useState(shift && isRepeatedTime(start, shift.time_zone) && branchInstant(start, shift.time_zone) !== shift.starts_at_utc ? 'later' : 'earlier');
-  const [endOccurrence, setEndOccurrence] = useState(shift && isRepeatedTime(end, shift.time_zone) && branchInstant(end, shift.time_zone) !== shift.ends_at_utc ? 'later' : 'earlier');
-  const [breakMinutes, setBreakMinutes] = useState(shift?.unpaid_break_minutes ?? 0);
+  const initial = shift || template;
+  const [locationId, setLocationId] = useState(initial?.location_id || locationFilter);
+  const [employeeId, setEmployeeId] = useState(initial?.employee_id || '');
+  const [start, setStart] = useState(initial ? branchWallTime(initial.starts_at_utc, initial.time_zone) : '');
+  const [end, setEnd] = useState(initial ? branchWallTime(initial.ends_at_utc, initial.time_zone) : '');
+  const [startOccurrence, setStartOccurrence] = useState(initial && isRepeatedTime(start, initial.time_zone) && branchInstant(start, initial.time_zone) !== initial.starts_at_utc ? 'later' : 'earlier');
+  const [endOccurrence, setEndOccurrence] = useState(initial && isRepeatedTime(end, initial.time_zone) && branchInstant(end, initial.time_zone) !== initial.ends_at_utc ? 'later' : 'earlier');
+  const [breakMinutes, setBreakMinutes] = useState(initial?.unpaid_break_minutes ?? 0);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const zone = locations.find(location => location.id === locationId)?.time_zone || '';
@@ -165,9 +174,10 @@ function ShiftEditor({ locations, employees, assignments, locationFilter, endpoi
     finally { setBusy(false); }
   }
   return <section className="panel rota-detail">
-    <div className="panel-title"><h2>{shift ? 'Edit draft shift' : 'Create draft shift'}</h2></div>
+    <div className="panel-title"><h2>{shift ? 'Edit draft shift' : template ? 'Duplicate shift as draft' : 'Create draft shift'}</h2></div>
     <form className="form-stack pad" onSubmit={save}>
       {error && <p className="alert error" role="alert">{error}</p>}
+      {template && <p className="form-hint">Copied from an existing shift. Review the date and time before creating a separate draft; overlapping shifts are still prevented.</p>}
       <label className="field">Location<select required value={locationId} onChange={event => {
         setLocationId(event.target.value); setEmployeeId(''); setStartOccurrence('earlier'); setEndOccurrence('earlier');
       }}><option value="">Select a location</option>{locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
@@ -186,7 +196,7 @@ function ShiftEditor({ locations, employees, assignments, locationFilter, endpoi
       </select></label>}
       <label className="field">Unpaid break (minutes)<input type="number" min={0} max={1440} required value={breakMinutes} onChange={event => setBreakMinutes(Number(event.target.value))}/></label>
       <p className="form-hint">{zone ? 'Enter local times in ' + zone + '.' : 'Select a branch to see its time zone.'}</p>
-      <button className="btn primary" disabled={busy || !zone}>{shift ? 'Save draft' : 'Create draft'}</button>
+      <button className="btn primary" disabled={busy || !zone}>{shift ? 'Save draft' : template ? 'Create duplicate draft' : 'Create draft'}</button>
     </form>
   </section>;
 }
