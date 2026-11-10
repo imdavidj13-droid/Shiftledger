@@ -100,6 +100,23 @@ app.use('/api/*',async(c,next)=>{
 });
 app.get('/api/health',c=>c.json({ok:true,service:'shiftledger',api:'v1'}));
 app.post('/api/v1/auth/register',async c=>{
+  // Fail with an actionable diagnostic if a deployment points to an unmigrated D1 DB.
+  try {
+    const required = ['users','auth_tokens','sessions','auth_rate_limits'];
+    const rows = await c.env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('users','auth_tokens','sessions','auth_rate_limits')").all() as {results: {name:string}[]};
+    if (required.some(name => !rows.results.some(row => row.name === name))) {
+      console.error('Registration preflight failed: missing authentication tables');
+      return fail(c,'Registration database is not ready. The administrator must apply the D1 migrations.',503);
+    }
+    const columns = await c.env.DB.prepare('PRAGMA table_info(users)').all() as {results: {name:string}[]};
+    if (['password_hash','password_salt','email_verified_at'].some(name => !columns.results.some(row => row.name === name))) {
+      console.error('Registration preflight failed: users schema missing authentication columns');
+      return fail(c,'Registration database needs the authentication migration.',503);
+    }
+  } catch (error) {
+    console.error('Registration preflight database failure',error);
+    return fail(c,'Registration database is temporarily unavailable.',503);
+  }
   if(!mailReady(c.env))return fail(c,'Email delivery has not been configured by the administrator.',503);
   const x=await body(c);if(!x)return fail(c,'Invalid JSON');
   const email=safeStr(x.email,254).toLowerCase(),password=x.password;
@@ -268,6 +285,10 @@ app.post('/api/v1/organisations/:orgId/shifts',async c=>{
   await c.env.DB.prepare('INSERT INTO shifts(id,organisation_id,location_id,employee_id,starts_at_utc,ends_at_utc,unpaid_break_minutes) VALUES(?,?,?,?,?,?,?)').bind(id,org,location,employee,new Date(start).toISOString(),new Date(end).toISOString(),breaks).run();
   return c.json({shift:{id,status:'draft'}},201);
 });
-app.onError((error,c)=>{console.error('ShiftLedger API error',error.message);return fail(c,'Server error',500);});
+app.onError((error,c)=>{
+  const requestId=crypto.randomUUID();
+  console.error('ShiftLedger API error',JSON.stringify({requestId,path:new URL(c.req.url).pathname,method:c.req.method,message:error.message}));
+  return c.json({error:'Server error',code:'UNEXPECTED_ERROR',requestId},500);
+});
 app.notFound(c=>fail(c,'Not found',404));
 export default app;
