@@ -1,5 +1,14 @@
 # ShiftLedger — ChatGPT Work execution handoff
 
+## CURRENT USER PRIORITY — COMPLETE P0, P1, P2 AND P3 TO 100%
+
+The user has explicitly directed that **everything up to and including P3 must be fully finished and verified**, before P4–P6. See the new **ACTIVE DEVELOPMENT MILESTONE** section at the top of `docs/FEATURE_BACKLOG.md`. Treat its four detailed phase exit gates as a binding checklist; do not declare 100% until every requirement has real persistence, correct role/organisation/location permissions, working UI, stable URLs, automated tests and successful deployed smoke verification. Implement as many complete vertical slices as tooling/session permits and document remaining incomplete tasks transparently.
+
+**Updated GitHub workflow:** Work directly on `main`. Do not create GitHub branches or PRs unless the user explicitly changes that requirement. Run typecheck, build, API and browser tests BEFORE pushing each cohesive change, not after; never push known failures. Cloudflare uses production builds from `main`, with preview builds disabled. The user does not want a separate staging Worker or D1 database. For new D1 schema, prepare safe additive migrations, test against a disposable *local* test database and ask before running them against production, with an existing backup/recovery checkpoint. Preserve existing organisation data and live sessions. Read `docs/DEPLOYMENT.md`.
+
+Current repo has initial weekly rota including a recently added duplicate-as-draft UI; that last commit's deployed build was not independently confirmed. Verify the existing implementation and CI state rather than assuming it works. Priorities: finish P0/P1 outstanding acceptance items, then complete all remaining P2 rota/notifications and P3 clocking/timesheets/availability/leave/swaps. Update documentation only alongside genuine code/test progress.
+
+
 Repository: https://github.com/imdavidj13-droid/Shiftledger
 Main roadmap: docs/FEATURE_BACKLOG.md
 Other required reading: README.md, docs/PRODUCT_BLUEPRINT.md, docs/DESIGN_SYSTEM.md, docs/ROUTES_AND_MULTI_LOCATION.md, docs/AUTH_UX_FLOW.md, docs/REGISTRATION_TEST_PLAN.md, docs/RESEND_DEV_TEST_SETUP.md.
