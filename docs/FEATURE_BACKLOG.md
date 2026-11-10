@@ -17,7 +17,7 @@ Unverified or incomplete: production migration state across environments; automa
 
 ## Verified implementation update
 
-See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope and [DEPLOYMENT.md](DEPLOYMENT.md) for deployment gates. Local Workers and D1 tests cover session persistence, tenant and branch isolation, migration smoke, browser history and mobile branch detail. Location lifecycle, branch manager grants, atomic staff assignment, private invitation links, membership suspension and branch-local draft shift entry are implemented. Hosted staging, production D1 history, live owner sign-in, and provider delivery are still separate gates.
+See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope and [DEPLOYMENT.md](DEPLOYMENT.md) for deployment gates. Local Workers and D1 tests cover session persistence, tenant and branch isolation, migration smoke, browser history and mobile branch detail. Location lifecycle, branch manager grants, atomic staff assignment, private invitation links, membership suspension, personal profile editing and the weekly rota with draft editing, publishing and cancellation are implemented. Published shifts are visible to their assigned employees. Hosted staging, production D1 history, live owner sign-in, and provider delivery are still separate gates.
 
 ## Priority P0 — Stabilise the product and deployments FIRST (blocking all features)
 - [ ] Inspect repo, dependencies, scripts, Worker/D1 bindings and current deployments; document exact current state and blockers. Preserve existing production D1, account and `David's Shop` test organisation.
@@ -39,17 +39,20 @@ See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope an
 - [ ] Add organisation editing, friendly slug/URL strategy without sacrificing stable IDs; week-start/time format settings, currency update policy, organisation archive and owner transfer.
 - [ ] Add first-class location list/detail/create/edit/archive/restore and branch-specific settings, opening hours, working patterns and default scheduling controls. One organisation may have many branches without new accounts or charges per branch.
 - [ ] Invitation lifecycle: invite/resend/revoke/accept, pending/expired, existing-user joins, account recovery; org owner/admin/manager/employee roles; owner transfer; scoped invitation permissions.
-- [ ] Branch manager assignment/revocation in UI and API, with explicit access to one or many locations. Owner/admin organisation-wide access; manager assigned branches only; employee own authorised records only. No role inheritance by URL or frontend.
+- [x] Branch manager assignment/revocation in UI and API, with explicit access to one or many locations. Owner/admin organisation-wide access; manager assigned branches only; employee own authorised records only. No role inheritance by URL or frontend.
 - [ ] One employee profile with many employee-location assignments; primary home location, optional secondary locations; inactive/archive, joining/leaving, employment fields, positions/departments, emergency/contact details only when lawful and necessary.
 - [x] Prevent scheduling staff in branches to which they have not been assigned; prevent conflicting shifts across **all** branches. Location-level filtering must not inadvertently expose records outside permissions.
-- [ ] End-to-end onboarding flow and employee invitation tests, full backend cross-tenant and cross-location matrices.
+- [x] End-to-end onboarding and invitation acceptance tests, with API checks for tenant, role and location boundaries in the implemented routes.
 
 **P1 acceptance:** two organisations and three branches with staff/manager permissions have been exercised in an isolated environment; unauthorised cross-org/cross-branch calls are refused; owner and authorised manager views work; browser refresh/deep links remain correct.
 
 ## Priority P2 — Scheduling, rotas and notifications
-- [ ] Weekly rota UI (desktop and mobile), day/list/month, location/team/role filters, time zones and DST; actual records from D1.
-- [ ] Create/edit/duplicate/delete draft shifts, recurring patterns, shift templates, copy week, bulk edits, breaks, skill/position requirements and shift notes.
-- [ ] Shift lifecycle: draft -> review -> publish -> updates -> cancellation; maintain version history and audit events, prevent unintentional duplicate notifications; permissioned publishing.
+- [x] Weekly rota UI (desktop and mobile), permanent week and shift URLs, location filtering, time zones and DST, using D1 records.
+- [ ] Additional day/list/month views and team or role filters.
+- [x] Create, edit and discard draft shifts with unpaid breaks and concurrent-edit protection.
+- [ ] Duplicate shifts, recurring patterns, shift templates, copy week, bulk edits, skill/position requirements and shift notes.
+- [x] Permissioned single-shift publishing and cancellation with revisions, audit events and employee visibility.
+- [ ] Review state, updates to published shifts, bulk publishing and idempotent staff notifications.
 - [ ] Conflict engine: overlapping shifts across locations, unavailability, approved leave, breaks, min/max hours, overtime warning, optional rest requirements, working-time rules as *configurable warnings* until jurisdiction-reviewed.
 - [ ] Open/unassigned shifts, claims, manager approval and notifications; schedule visibility appropriate to role.
 - [ ] User notifications centre: in-app and email templates, opt-in preferences, queued/retried/idempotent messages, digest modes, delivery/bounce diagnostics and quota observability.

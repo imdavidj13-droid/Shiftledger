@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { registerShifts } from './shifts';
 import { registerInvitations } from './invitations';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
@@ -119,7 +120,7 @@ app.get('/api/health',c=>c.json({ok:true,service:'shiftledger',api:'v1'}));
 app.get('/api/v1/health',c=>c.json({ok:true,service:'shiftledger',api:'v1'}));
 app.get('/api/v1/ready',async c=>{
   try {
-    await c.env.DB.prepare(`SELECT o.week_start, u.email_verified_at
+    await c.env.DB.prepare(`SELECT o.week_start, u.email_verified_at, shifts.revision
       FROM organisations o, users u, sessions, auth_tokens, auth_rate_limits,
       locations, employees, employee_locations, location_access, memberships, shifts, audit_events, invitations, invitation_locations LIMIT 0`).all();
     return c.json({ok:true});
@@ -211,6 +212,16 @@ app.post('/api/v1/auth/logout',async c=>{
 app.get('/api/v1/auth/me',async c=>{
   const u=await currentUser(c);if(!u)return fail(c,'Sign in required',401);
   return c.json({user:{id:u.id,name:u.display_name,email:u.email_normalized}});
+});
+app.patch('/api/v1/auth/me', async c => {
+  const user = await currentUser(c);
+  if (!user) return fail(c,'Sign in required',401);
+  const input = await body(c), name = safeStr(input?.name,101);
+  if (name.length<2 || name.length>100 || /[\u0000-\u001f\u007f]/.test(name)) {
+    return fail(c,'Enter a display name from 2 to 100 characters.',422);
+  }
+  await c.env.DB.prepare('UPDATE users SET display_name=? WHERE id=?').bind(name,user.id).run();
+  return c.json({user:{id:user.id,name,email:user.email_normalized}});
 });
 app.post('/api/v1/auth/forgot-password',async c=>{
   const x=await body(c),email=safeStr(x?.email,254).toLowerCase();
@@ -489,49 +500,7 @@ app.post('/api/v1/organisations/:orgId/employees',async c=>{
   if (!results[0].meta.changes) return fail(c,'Location not found',404);
   return c.json({employee:{id,display_name:name,employment_status:'active'}},201);
 });
-app.get('/api/v1/organisations/:orgId/shifts',async c=>{
-  const org=c.get('organisationId'),role=c.get('role');
-  if(!['owner','admin','manager'].includes(role))return fail(c,'Only managers can view rota data',403);
-  const rows=role==='manager'
-    ?await c.env.DB.prepare('SELECT s.id,s.location_id,s.employee_id,s.starts_at_utc,s.ends_at_utc,s.unpaid_break_minutes,s.status FROM shifts s JOIN location_access a ON a.organisation_id=s.organisation_id AND a.location_id=s.location_id WHERE s.organisation_id=? AND a.user_id=? ORDER BY s.starts_at_utc DESC LIMIT 200').bind(org,c.get('userId')).all()
-    :await c.env.DB.prepare('SELECT id,location_id,employee_id,starts_at_utc,ends_at_utc,unpaid_break_minutes,status FROM shifts WHERE organisation_id=? ORDER BY starts_at_utc DESC LIMIT 200').bind(org).all();
-  return c.json({shifts:rows.results});
-});
-app.post('/api/v1/organisations/:orgId/shifts',async c=>{
-  if(!['owner','admin','manager'].includes(c.get('role')))return fail(c,'Not permitted',403);
-  const x=await body(c),location=safeStr(x?.locationId,64),employee=x?.employeeId? safeStr(x.employeeId,64):null;
-  const start=safeStr(x?.startsAt,40),end=safeStr(x?.endsAt,40),breaks=x?.breakMinutes??0;
-  if(!location||!/^\d{4}-\d{2}-\d{2}T/.test(start)||!start.endsWith('Z')||!end.endsWith('Z')||!Number.isFinite(Date.parse(start))||!Number.isFinite(Date.parse(end))||Date.parse(end)<=Date.parse(start)||!Number.isInteger(breaks)||breaks<0||breaks>1440)return fail(c,'Valid location, UTC start/end and break minutes required',422);
-  const id=crypto.randomUUID(),org=c.get('organisationId');
-  const loc=await c.env.DB.prepare('SELECT id FROM locations WHERE organisation_id=? AND id=? AND archived_at IS NULL').bind(org,location).first();
-  if(!loc)return fail(c,'Location not found',404);
-  if(c.get('role')==='manager') {
-    const access=await c.env.DB.prepare('SELECT 1 FROM location_access WHERE organisation_id=? AND location_id=? AND user_id=?').bind(org,location,c.get('userId')).first();
-    if(!access)return fail(c,'You do not manage this location',403);
-  }
-  if(employee){
-    const emp=await c.env.DB.prepare("SELECT id FROM employees WHERE organisation_id=? AND id=? AND employment_status='active'").bind(org,employee).first();
-    if(!emp)return fail(c,'Employee not found',404);
-    const assigned=await c.env.DB.prepare('SELECT 1 FROM employee_locations WHERE organisation_id=? AND employee_id=? AND location_id=?').bind(org,employee,location).first();
-    if(!assigned)return fail(c,'Assign this employee to the selected location before scheduling them',422);
-  }
-  const startUtc = new Date(start).toISOString(), endUtc = new Date(end).toISOString();
-  if (breaks * 60000 >= Date.parse(endUtc) - Date.parse(startUtc)) return fail(c,'Break must be shorter than the shift.',422);
-  const created = await c.env.DB.prepare(`INSERT INTO shifts(id,organisation_id,location_id,employee_id,starts_at_utc,ends_at_utc,unpaid_break_minutes)
-    SELECT ?1,?2,?3,?4,?5,?6,?7
-    WHERE EXISTS (SELECT 1 FROM locations WHERE organisation_id=?2 AND id=?3 AND archived_at IS NULL)
-      AND EXISTS (SELECT 1 FROM memberships m WHERE m.organisation_id=?2 AND m.user_id=?8 AND m.status='active'
-        AND (m.role IN ('owner','admin') OR (m.role='manager' AND EXISTS
-          (SELECT 1 FROM location_access WHERE organisation_id=?2 AND location_id=?3 AND user_id=?8))))
-      AND (?4 IS NULL OR (
-        EXISTS (SELECT 1 FROM employee_locations el JOIN employees e ON e.organisation_id=el.organisation_id AND e.id=el.employee_id
-          WHERE el.organisation_id=?2 AND el.location_id=?3 AND el.employee_id=?4 AND e.employment_status='active')
-        AND NOT EXISTS (SELECT 1 FROM shifts WHERE organisation_id=?2 AND employee_id=?4 AND ${activeShift}
-          AND starts_at_utc<?6 AND ends_at_utc>?5)))
-    `).bind(id,org,location,employee,startUtc,endUtc,breaks,c.get('userId')).run();
-  if (!created.meta.changes) return fail(c,'The employee has an overlapping shift or the location or assignment is no longer available.',409);
-  return c.json({shift:{id,status:'draft'}},201);
-});
+registerShifts(app);
 registerInvitations(app, currentUser);
 app.onError((_error,c)=>{
   console.error(JSON.stringify({event:'unexpected_api_error',requestId:c.get('requestId'),method:c.req.method}));

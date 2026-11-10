@@ -53,7 +53,7 @@ test('tenant, role and branch scope are enforced by D1-backed API requests', asy
   try {
     await login(employee, employeeEmail);
     expect((await employee.get(org + '/employees')).status()).toBe(403);
-    expect((await employee.get(org + '/shifts')).status()).toBe(403);
+    expect((await (await employee.get(org + '/shifts?from=2032-03-08T00:00:00Z&to=2032-03-09T00:00:00Z')).json()).shifts).toEqual([]);
     expect((await employee.post(org + '/locations', { data: { name: 'Unauthorized', timeZone: 'UTC' } })).status()).toBe(403);
   } finally { await employee.dispose(); }
 });

@@ -22,7 +22,8 @@ const users = [
   ['verify-user', 'verify@example.test', 'Verification User', false],
   ['onboard-user', 'onboard@example.test', 'New Owner', true],
   ['join-user', 'join@example.test', 'New Employee', true],
-  ['join-manager', 'joining-manager@example.test', 'New Manager', true]
+  ['join-manager', 'joining-manager@example.test', 'New Manager', true],
+  ['browser-onboard', 'browser-onboard@example.test', 'New Business Owner', true]
 ];
 const seed = `
 INSERT INTO users (id,email_normalized,display_name,password_hash,password_salt,email_verified_at) VALUES

@@ -15,12 +15,13 @@ export function parseWorkspace(pathname: string) {
   if (!match) return null;
   const [, organisationId, slug = 'overview', resourceId] = match;
   const page = (Object.keys(PAGE_SLUGS) as Page[]).find(page => PAGE_SLUGS[page] === slug);
-  if (!page || (resourceId && page !== 'Locations')) return null;
+  if (!page || (resourceId && page !== 'Locations' && page !== 'Schedule')) return null;
   return { organisationId, page, resourceId };
 }
 
 export function signInDestination(search: string) {
   const next = new URLSearchParams(search).get('next');
+  if (next === '/profile') return next;
   if (!next || (!next.startsWith('/app/') && !next.startsWith('/join?'))) return null;
   const url = new URL(next, window.location.origin);
   if (url.origin !== window.location.origin) return null;
@@ -28,8 +29,8 @@ export function signInDestination(search: string) {
   return invite || parseWorkspace(url.pathname) ? url.pathname + url.search : null;
 }
 
-export function go(path: string, replace = false) {
-  window.history[replace ? 'replaceState' : 'pushState']({}, '', path);
+export function go(path: string, replace = false, state: object = {}) {
+  window.history[replace ? 'replaceState' : 'pushState'](state, '', path);
   window.dispatchEvent(new Event('shiftledger:navigation'));
 }
 

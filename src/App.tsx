@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { LayoutDashboard, CalendarDays, UsersRound, Clock3, CalendarCheck2, ArrowLeftRight, BarChart3, Settings2, Plus, LogOut, Building2, MapPin, ShieldCheck, ArrowRight, CheckCircle2, AlertCircle, RefreshCcw } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, UsersRound, Clock3, CalendarCheck2, ArrowLeftRight, BarChart3, Settings2, UserRound, Plus, LogOut, Building2, MapPin, ShieldCheck, ArrowRight, CheckCircle2, AlertCircle, RefreshCcw } from 'lucide-react';
 import { appPath, go, parseWorkspace, signInDestination, useRoute, type Page } from './routes';
 import { api, ApiError, post, write } from './api';
 import { Locations, OrganisationSettings, type Location, type Org } from './Locations';
-import { branchInstant, formatShiftTime, isRepeatedTime } from './time';
+import { formatShiftTime } from './time';
+import { Rota, type Shift } from './Rota';
+import { Profile, type User } from './Profile';
 import { Invitations, JoinInvitation } from './Invitations';
 
-type User = {id:string;name:string;email:string};
 type Employee = {id:string;display_name:string;employment_status:string;user_id?:string|null};
 type EmployeeLocation = {employee_id:string;location_id:string};
-type Shift = {id:string;location_id:string;employee_id:string|null;starts_at_utc:string;ends_at_utc:string;status:string};
 type AuthMode='login'|'register'|'forgot'|'reset'|'pending';
 const nav: {name:Page;icon:typeof LayoutDashboard}[]=[
  {name:'Overview',icon:LayoutDashboard},{name:'Schedule',icon:CalendarDays},{name:'Team',icon:UsersRound},{name:'Locations',icon:MapPin},{name:'Access',icon:ShieldCheck},{name:'Timesheets',icon:Clock3},{name:'Leave',icon:CalendarCheck2},{name:'Shift swaps',icon:ArrowLeftRight},{name:'Reports',icon:BarChart3},{name:'Settings',icon:Settings2}
@@ -140,15 +140,37 @@ const timeZoneOptions = Array.from(new Set([
  ...countries.map(country=>country.zone),
  initialZone
 ])).sort((a,b)=>a.localeCompare(b));
+type SetupDraft = {
+ orgName:string; industry:string; teamSize:string; country:string; currency:string; zone:string;
+ weekStart:number; timeFormat:string; multiLocation:boolean; branches:{name:string;timeZone:string}[];
+};
 function Onboard({refresh}:{refresh:()=>void}){
- const [step,setStep]=useState(1);
- const [orgName,setOrgName]=useState(''),[industry,setIndustry]=useState(''),[teamSize,setTeamSize]=useState('');
- const [country,setCountry]=useState('GB'),[currency,setCurrency]=useState('GBP'),[zone,setZone]=useState(initialZone);
- const [weekStart,setWeekStart]=useState(1),[timeFormat,setTimeFormat]=useState('24h');
- const [multiLocation,setMultiLocation]=useState(false),[branches,setBranches]=useState([{name:'',timeZone:''}]);
+ const route=useRoute();
+ const [initial]=useState<SetupDraft|undefined>(()=>window.history.state?.setupDraft);
+ const [orgName,setOrgName]=useState(initial?.orgName??''),[industry,setIndustry]=useState(initial?.industry??''),[teamSize,setTeamSize]=useState(initial?.teamSize??'');
+ const [country,setCountry]=useState(initial?.country??'GB'),[currency,setCurrency]=useState(initial?.currency??'GBP'),[zone,setZone]=useState(initial?.zone??'Europe/London');
+ const [weekStart,setWeekStart]=useState(initial?.weekStart??1),[timeFormat,setTimeFormat]=useState(initial?.timeFormat??'24h');
+ const [multiLocation,setMultiLocation]=useState(initial?.multiLocation??false),[branches,setBranches]=useState(initial?.branches??[{name:'',timeZone:''}]);
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
- const goNext=(e:FormEvent)=>{e.preventDefault();setError('');setStep(previous=>Math.min(3,previous+1));};
- function selectCountry(next:string){setCountry(next);const preset=countries.find(c=>c.code===next);if(preset){setCurrency(preset.currency);setZone(preset.zone);}}
+ const requestedStep=Number(route.searchParams.get('step'));
+ const step=requestedStep===3&&orgName.trim().length>=2&&/^[A-Z]{3}$/.test(currency)&&zone?3:
+  requestedStep===2&&orgName.trim().length>=2?2:1;
+ const setupDraft:SetupDraft={orgName,industry,teamSize,country,currency,zone,weekStart,timeFormat,multiLocation,branches};
+ useEffect(()=>{
+  const path=step===1?'/onboarding':'/onboarding?step='+step;
+  if(route.pathname+route.search!==path)go(path,true,{setupDraft});
+  else {
+   const persist=window.setTimeout(()=>window.history.replaceState({setupDraft},'',path),200);
+   return ()=>window.clearTimeout(persist);
+  }
+ },[route.href,step,orgName,industry,teamSize,country,currency,zone,weekStart,timeFormat,multiLocation,branches]);
+ const setStep=(next:number)=>{setError('');go(next===1?'/onboarding':'/onboarding?step='+next,false,{setupDraft});};
+ const goNext=(event:FormEvent)=>{event.preventDefault();setStep(Math.min(3,step+1));};
+ function selectCountry(next:string){
+  setCountry(next);
+  const preset=countries.find(item=>item.code===next);
+  setCurrency(preset?.currency??'');setZone(preset?.zone??initialZone);
+ }
  async function create(e:FormEvent){
    e.preventDefault();setBusy(true);setError('');
    try {
@@ -206,29 +228,28 @@ function Dashboard({user,org,organisations,page,resourceId,locationFilter,onLogo
  const [loadFailed,setLoadFailed]=useState(false);
  const filterSuffix=(location:string)=>location?'?location='+encodeURIComponent(location):'';
  const navPath=(next:Page)=>appPath(org.id,next)+(['Locations','Access'].includes(next)?'':filterSuffix(locationFilter));
- const changeLocation=(location:string)=>go(appPath(org.id,page)+filterSuffix(location));
+ const changeLocation=(location:string)=>{
+  const query=new URLSearchParams(window.location.search);
+  if(location)query.set('location',location);
+  else query.delete('location');
+  query.delete('cursor');
+  go(appPath(org.id,page)+(query.size?'?'+query:''));
+ };
  const [locations,setLocations]=useState<Location[]>([]),[employees,setEmployees]=useState<Employee[]>([]),[shifts,setShifts]=useState<Shift[]>([]);
  const [employeeLocations,setEmployeeLocations]=useState<EmployeeLocation[]>([]);
  const [employeeName,setEmployeeName]=useState('');
- const [newLocation,setNewLocation]=useState(''),[newEmployee,setNewEmployee]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState('');
- const [startOccurrence,setStartOccurrence]=useState<'earlier'|'later'>('earlier');
- const [endOccurrence,setEndOccurrence]=useState<'earlier'|'later'>('earlier');
- const [breakMinutes,setBreakMinutes]=useState(0);
  const [busy,setBusy]=useState(false);
  const canManage=['owner','admin','manager'].includes(org.role);
  const canAdminister=['owner','admin'].includes(org.role);
  async function reload(){setError('');setLoadFailed(false);setLoading(true);try{
   const base='/organisations/'+org.id;
-  const responses=await Promise.all([api<{locations:Location[]}>(base+'/locations'),canManage?api<{employees:Employee[]}>(base+'/employees'):Promise.resolve({employees:[]}),canManage?api<{shifts:Shift[]}>(base+'/shifts'):Promise.resolve({shifts:[]}),canManage?api<{assignments:EmployeeLocation[]}>(base+'/employee-locations'):Promise.resolve({assignments:[]})]);
+  const responses=await Promise.all([api<{locations:Location[]}>(base+'/locations'),canManage?api<{employees:Employee[]}>(base+'/employees'):Promise.resolve({employees:[]}),api<{shifts:Shift[]}>(base+'/shifts'),canManage?api<{assignments:EmployeeLocation[]}>(base+'/employee-locations'):Promise.resolve({assignments:[]})]);
   setLocations(responses[0].locations);setEmployees(responses[1].employees);setShifts(responses[2].shifts);setEmployeeLocations(responses[3].assignments);
  }catch(e){setLoadFailed(true);setError((e as Error).message)}finally{setLoading(false)}}
  useEffect(()=>{void reload()},[org.id]);
  const filteredShifts=locationFilter?shifts.filter(s=>s.location_id===locationFilter):shifts;
  const upcomingShifts=filteredShifts.filter(shift=>shift.status!=='cancelled'&&Date.parse(shift.ends_at_utc)>Date.now())
   .sort((a,b)=>a.starts_at_utc.localeCompare(b.starts_at_utc));
- const locationZone=(id:string)=>locations.find(location=>location.id===id)?.time_zone||org.time_zone;
- const selectedZone=locations.find(location=>location.id===newLocation)?.time_zone;
- const shiftTime=(instant:string,locationId:string)=>formatShiftTime(instant,locationZone(locationId),org.time_format);
  const filteredEmployees=locationFilter?employees.filter(e=>employeeLocations.some(a=>a.employee_id===e.id&&a.location_id===locationFilter)):employees;
  async function action(fn:()=>Promise<unknown>,done:string){
   setBusy(true);setError('');setSuccess('');
@@ -237,14 +258,14 @@ function Dashboard({user,org,organisations,page,resourceId,locationFilter,onLogo
   finally{setBusy(false)}
  }
  const base='/organisations/'+org.id;
- return <div className="app"><aside className="sidebar"><Brand/><div className="workspace"><div className="workspace-icon">{org.name.charAt(0).toUpperCase()}</div><div><strong>{org.name}</strong><small>{org.role}</small></div></div>{organisations.length>1&&<select className="org-picker" aria-label="Switch organisation" value={org.id} onChange={e=>go(appPath(e.target.value,'Overview'))}>{organisations.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select>}<div className="nav-label">LOCATIONS</div><select className="org-picker" aria-label="Filter workspace by location" value={locationFilter} onChange={e=>changeLocation(e.target.value)}><option value="">All locations</option>{locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select><div className="nav-label">WORKSPACE</div><nav>{nav.filter(item=>item.name!=='Access'||canAdminister).map(({name,icon:Icon})=><a key={name} href={navPath(name)} aria-label={name} aria-current={page===name?'page':undefined} className={'nav-item '+(page===name?'selected':'')} onClick={event=>{if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();setError('');setSuccess('');go(navPath(name));}}><Icon size={19}/><span>{name}</span></a>)}</nav><div className="sidebar-bottom"><div className="sidebar-callout"><ShieldCheck size={23}/><strong>Your data, your organisation.</strong><span>All workspace requests are checked on the server.</span></div><button className="profile" onClick={onLogout} aria-label="Sign out"><span className="profile-icon">{user.name.charAt(0).toUpperCase()}</span><span><strong>{user.name}</strong><small>Sign out</small></span><LogOut size={18}/></button></div></aside>
- <div className="main"><header className="topbar"><div className="breadcrumb"><span>{org.name}</span><b>/</b><strong>{page}</strong></div><div className="top-right"><select className="top-location-picker" aria-label="Filter by location" value={locationFilter} onChange={e=>changeLocation(e.target.value)}><option value="">All locations</option>{locations.map(l=><option value={l.id} key={l.id}>{l.name}</option>)}</select><span className="role-tag">{org.role}</span><button className="mobile-sign-out" aria-label="Sign out" onClick={onLogout}><LogOut size={18}/></button></div></header>
+ return <div className="app"><aside className="sidebar"><Brand/><div className="workspace"><div className="workspace-icon">{org.name.charAt(0).toUpperCase()}</div><div><strong>{org.name}</strong><small>{org.role}</small></div></div>{organisations.length>1&&<select className="org-picker" aria-label="Switch organisation" value={org.id} onChange={e=>go(appPath(e.target.value,'Overview'))}>{organisations.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select>}<div className="nav-label">LOCATIONS</div><select className="org-picker" aria-label="Filter workspace by location" value={locationFilter} onChange={e=>changeLocation(e.target.value)}><option value="">All locations</option>{locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select><div className="nav-label">WORKSPACE</div><nav>{nav.filter(item=>item.name!=='Access'||canAdminister).map(({name,icon:Icon})=><a key={name} href={navPath(name)} aria-label={name} aria-current={page===name?'page':undefined} className={'nav-item '+(page===name?'selected':'')} onClick={event=>{if(event.button!==0||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;event.preventDefault();setError('');setSuccess('');go(navPath(name));}}><Icon size={19}/><span>{name}</span></a>)}</nav><div className="sidebar-bottom"><div className="sidebar-callout"><ShieldCheck size={23}/><strong>Your data, your organisation.</strong><span>All workspace requests are checked on the server.</span></div><a className="workspace-profile" href="/profile"><span className="profile-icon">{user.name.charAt(0).toUpperCase()}</span><span>{user.name}<small>Personal profile</small></span></a><button className="profile" onClick={onLogout} aria-label="Sign out"><span><strong>Sign out</strong></span><LogOut size={18}/></button></div></aside>
+ <div className="main"><header className="topbar"><div className="breadcrumb"><span>{org.name}</span><b>/</b><strong>{page}</strong></div><div className="top-right"><select className="top-location-picker" aria-label="Filter by location" value={locationFilter} onChange={e=>changeLocation(e.target.value)}><option value="">All locations</option>{locations.map(l=><option value={l.id} key={l.id}>{l.name}</option>)}</select><span className="role-tag">{org.role}</span><a className="mobile-profile" href="/profile" aria-label="Personal profile"><UserRound size={18}/></a><button className="mobile-sign-out" aria-label="Sign out" onClick={onLogout}><LogOut size={18}/></button></div></header>
  <main className="page"><div className="overline">SHIFTLEDGER / {page.toUpperCase()}</div><div className="page-heading"><div><h1>{page==='Overview'?'Your workforce, organised.':page}</h1><p>{page==='Overview'?'Your live organisation overview.':'Manage '+page.toLowerCase()+' for '+org.name+'.'}</p></div><button className="btn outline" onClick={()=>void reload()} disabled={loading}><RefreshCcw size={17}/> Refresh</button></div>
  {(error||logoutError)&&<Alert message={error||logoutError}/>}
  {success&&<Alert message={success} kind="success"/>}
  {loading?<p role="status">Loading workspace data…</p>:loadFailed?null:
  locationFilter&&!locations.some(l=>l.id===locationFilter)?<Alert message="This location is unavailable or you do not have access."/>:<>
- {page==='Overview'&&<><div className="hero-strip"><div><span>YOUR ORGANISATION</span><h2>{org.name}</h2><p>{org.country_code} · {org.time_zone} · {org.currency_code}</p></div><span className="hero-role">{locationFilter?locations.find(l=>l.id===locationFilter)?.name||'BRANCH':org.role.toUpperCase()}</span></div><div className="stats"><Stat title="Team members" value={canManage?filteredEmployees.length:'—'} note={locationFilter?'Assigned to selected branch':'Organisation directory records'}/><Stat title="Locations" value={locationFilter?1:locations.length} note={locationFilter?'Selected branch':'Operating sites'}/><Stat title="Recent shift records" value={canManage?filteredShifts.length:'—'} note="Up to 200 latest records"/><Stat title="Published in recent records" value={canManage?filteredShifts.filter(s=>s.status==='published').length:'—'} note="Based on the same records"/></div><div className="two-col"><section className="panel"><div className="panel-title"><h2>Upcoming shifts</h2><span>From your live database</span></div>{upcomingShifts.length? <div className="records">{upcomingShifts.slice(0,6).map(s=><div className="record" key={s.id}><CalendarDays size={19}/><div><strong>{shiftTime(s.starts_at_utc,s.location_id)}</strong><small>{s.status} · {locations.find(l=>l.id===s.location_id)?.name||'Location'}</small></div></div>)}</div>:<Empty icon={<CalendarDays size={32}/>} heading="No upcoming shifts" description="Upcoming shifts for this workspace appear here."/>}</section><section className="panel"><div className="panel-title"><h2>Getting started</h2><span>Organisation setup</span></div><div className="steps"><div><b>01</b><span><strong>Organisation created</strong><small>Your workspace is ready.</small></span><CheckCircle2 size={18}/></div><div><b>02</b><span><strong>Add locations</strong><small>Set up the places you operate.</small></span></div><div><b>03</b><span><strong>Add your team</strong><small>Create employee directory records.</small></span></div><div><b>04</b><span><strong>Plan shifts</strong><small>Draft a schedule for your team.</small></span></div></div></section></div></>}
+ {page==='Overview'&&<><div className="hero-strip"><div><span>YOUR ORGANISATION</span><h2>{org.name}</h2><p>{org.country_code} · {org.time_zone} · {org.currency_code}</p></div><span className="hero-role">{locationFilter?locations.find(l=>l.id===locationFilter)?.name||'BRANCH':org.role.toUpperCase()}</span></div><div className="stats"><Stat title="Team members" value={canManage?filteredEmployees.length:'—'} note={locationFilter?'Assigned to selected branch':'Organisation directory records'}/><Stat title="Locations" value={locationFilter?1:locations.length} note={locationFilter?'Selected branch':'Operating sites'}/><Stat title="Recent shift records" value={canManage?filteredShifts.length:'—'} note="Up to 200 latest records"/><Stat title="Published in recent records" value={canManage?filteredShifts.filter(s=>s.status==='published').length:'—'} note="Based on the same records"/></div><div className="two-col"><section className="panel"><div className="panel-title"><h2>Upcoming shifts</h2><span>From your live database</span></div>{upcomingShifts.length? <div className="records">{upcomingShifts.slice(0,6).map(s=><div className="record" key={s.id}><CalendarDays size={19}/><div><strong>{formatShiftTime(s.starts_at_utc,s.time_zone,org.time_format)}</strong><small>{s.status} · {s.location_name}</small></div></div>)}</div>:<Empty icon={<CalendarDays size={32}/>} heading="No upcoming shifts" description="Upcoming shifts for this workspace appear here."/>}</section><section className="panel"><div className="panel-title"><h2>Getting started</h2><span>Organisation setup</span></div><div className="steps"><div><b>01</b><span><strong>Organisation created</strong><small>Your workspace is ready.</small></span><CheckCircle2 size={18}/></div><div><b>02</b><span><strong>Add locations</strong><small>Set up the places you operate.</small></span></div><div><b>03</b><span><strong>Add your team</strong><small>Create employee directory records.</small></span></div><div><b>04</b><span><strong>Plan shifts</strong><small>Draft a schedule for your team.</small></span></div></div></section></div></>}
  {page==='Settings'&&<OrganisationSettings org={org} onSave={onOrganisationChange}/>}
  {page==='Access'&&(canAdminister?<Invitations org={org} locations={locations} employees={employees}/>:<Alert message="Only owners and administrators can manage access."/>)}
  {page==='Locations'&&<Locations key={resourceId??'directory'} org={org} resourceId={resourceId} locations={locations} onLocationsChanged={reload}/>}
@@ -252,33 +273,7 @@ function Dashboard({user,org,organisations,page,resourceId,locationFilter,onLogo
   const location=locations.find(l=>l.id===a.location_id);
   return location&&<button type="button" className="btn outline" key={location.id} disabled={busy} onClick={()=>void action(()=>write(base+'/employee-locations/'+e.id+'/'+location.id,{},'DELETE'),'Location assignment removed.')}>Remove {location.name}</button>;
  })}</div><select aria-label={'Assign location to '+e.display_name} value="" disabled={busy||!locations.length} onChange={event=>{const locationId=event.target.value;if(locationId)void action(()=>post(base+'/employee-locations',{employeeId:e.id,locationId}),'Location assigned to employee.')}}><option value="">Assign to a location…</option>{locations.filter(l=>!employeeLocations.some(x=>x.employee_id===e.id&&x.location_id===l.id)).map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></>}</div></div>)}</div>:<Empty icon={<UsersRound size={33}/>} heading="No employees yet" description="Create your first employee directory record."/>}</section>{['owner','admin'].includes(org.role)&&<section className="panel"><div className="panel-title"><h2>Add employee</h2></div><form className="form-stack pad" onSubmit={e=>{e.preventDefault();void action(()=>post(base+'/employees',{name:employeeName,locationId:locationFilter}),'Employee added'+(locationFilter?' to the selected location.':'.')).then(ok=>{if(ok)setEmployeeName('')})}}><Field label="Full name"><input required minLength={2} value={employeeName} onChange={e=>setEmployeeName(e.target.value)}/></Field><div className="form-hint">One employee record can be assigned to several branches. Use Access to invite them to sign in.</div><button disabled={busy} className="btn primary"><Plus size={17}/> Add employee</button></form></section>}</div>}
- {page==='Schedule'&&<div className="two-col">
- <section className="panel"><div className="panel-title"><h2>Shift planner</h2><span>{filteredShifts.length} recent records</span></div>
- {filteredShifts.length?<div className="records">{filteredShifts.map(shift=><div className="record" key={shift.id}><CalendarDays size={20}/><div>
- <strong>{shiftTime(shift.starts_at_utc,shift.location_id)} – {shiftTime(shift.ends_at_utc,shift.location_id)}</strong>
- <small>{shift.status} · {employees.find(employee=>employee.id===shift.employee_id)?.display_name||'Unassigned'} · {locations.find(location=>location.id===shift.location_id)?.name||'Location'}</small></div></div>)}</div>:
- <Empty icon={<CalendarDays size={33}/>} heading="Your schedule is empty" description="Shifts for this workspace appear here."/>}</section>
- {canManage&&<section className="panel"><div className="panel-title"><h2>Create draft shift</h2></div>
- <form className="form-stack pad" onSubmit={event=>{
-  event.preventDefault();
-  if(!selectedZone)return;
-  void action(()=>post(base+'/shifts',{
-   locationId:newLocation,employeeId:newEmployee||null,startsAt:branchInstant(start,selectedZone,startOccurrence),
-   endsAt:branchInstant(end,selectedZone,endOccurrence),breakMinutes
-  }),'Draft shift created.');
- }}>
- <Field label="Location"><select required value={newLocation} onChange={event=>{setNewLocation(event.target.value);setNewEmployee('');setStartOccurrence('earlier');setEndOccurrence('earlier')}}>
- <option value="">Select a location</option>{locations.map(location=><option key={location.id} value={location.id}>{location.name}</option>)}</select></Field>
- <Field label="Employee"><select value={newEmployee} onChange={event=>setNewEmployee(event.target.value)}><option value="">Unassigned</option>
- {employees.filter(employee=>employee.employment_status==='active'&&employeeLocations.some(assignment=>assignment.employee_id===employee.id&&assignment.location_id===newLocation)).map(employee=><option key={employee.id} value={employee.id}>{employee.display_name}</option>)}</select></Field>
- <Field label={'Start'+(selectedZone?' ('+selectedZone+')':'')}><input type="datetime-local" required value={start} onChange={event=>{setStart(event.target.value);setStartOccurrence('earlier')}}/></Field>
- {selectedZone&&isRepeatedTime(start,selectedZone)&&<Field label="Start time occurrence"><select value={startOccurrence} onChange={event=>setStartOccurrence(event.target.value as 'earlier'|'later')}><option value="earlier">First occurrence</option><option value="later">Second occurrence</option></select></Field>}
- <Field label={'End'+(selectedZone?' ('+selectedZone+')':'')}><input type="datetime-local" required value={end} onChange={event=>{setEnd(event.target.value);setEndOccurrence('earlier')}}/></Field>
- {selectedZone&&isRepeatedTime(end,selectedZone)&&<Field label="End time occurrence"><select value={endOccurrence} onChange={event=>setEndOccurrence(event.target.value as 'earlier'|'later')}><option value="earlier">First occurrence</option><option value="later">Second occurrence</option></select></Field>}
- <Field label="Unpaid break (minutes)"><input type="number" min={0} max={1440} required value={breakMinutes} onChange={event=>setBreakMinutes(Number(event.target.value))}/></Field>
- <p className="form-hint">Times use the selected location’s time zone. Drafts are visible to authorised schedulers.</p>
- <button className="btn primary" disabled={busy||!locations.length}><Plus size={17}/> Create draft shift</button>
- </form></section>}</div>}
+ {page==='Schedule'&&<Rota org={org} locations={locations} employees={employees} assignments={employeeLocations} locationFilter={locationFilter} resourceId={resourceId}/>}
  {(['Timesheets','Leave','Shift swaps','Reports'] as Page[]).includes(page)&&<section className="panel"><div className="panel-title"><h2>{page} module</h2><span>Not enabled</span></div><Empty icon={<ShieldCheck size={33}/>} heading="Not yet available" description="This module will not accept or simulate employee data until its API, permissions and approval flow are implemented."/></section>}
  </>}
  <footer>© ShiftLedger · Real organisation data · No simulated statistics</footer></main></div></div>;
@@ -301,7 +296,7 @@ function App(){
    if(reason instanceof ApiError&&reason.status===401){
     setUser(null);setOrgs(null);
     const requested=window.location.pathname+window.location.search;
-    if(parseWorkspace(window.location.pathname)||window.location.pathname==='/join')go('/sign-in?next='+encodeURIComponent(requested),true);
+    if(parseWorkspace(window.location.pathname)||['/join','/profile'].includes(window.location.pathname))go('/sign-in?next='+encodeURIComponent(requested),true);
    }else{
     setError('Could not load your workspace. '+(reason as Error).message);
    }
@@ -330,6 +325,7 @@ function App(){
   onJoin={id=>{go(appPath(id,'Overview'),true);void refresh()}}
   onSwitch={async()=>{await post('/auth/logout',{});setUser(null);setOrgs(null);go('/sign-in?next='+encodeURIComponent(route.pathname+route.search),true)}}/>;
  if(!user||route.searchParams.has('reset'))return <Auth onSuccess={()=>void refresh()}/>;
+ if(route.pathname==='/profile')return <Profile user={user} onSave={setUser} workspace={orgs?.[0]?appPath(orgs[0].id,'Overview'):'/onboarding'}/>;
  if(route.pathname==='/onboarding'&&!orgs?.length)return <Onboard refresh={()=>{go('/',true);void refresh()}}/>;
  if(!workspace&&['/','/sign-in','/register','/check-email','/forgot-password'].includes(route.pathname))return <div className="loading"><Brand/><p role="status">Opening your workspace…</p></div>;
  const org=orgs?.find(item=>item.id===workspace?.organisationId);
