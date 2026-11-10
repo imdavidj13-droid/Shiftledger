@@ -247,7 +247,7 @@ app.get('/api/v1/organisations/:orgId',async c=>{
   return c.json({organisation:{...row,role:c.get('role')}});
 });
 app.get('/api/v1/organisations/:orgId/members',async c=>{
-  if(!['owner','admin','manager'].includes(c.get('role')))return fail(c,'Not permitted',403);
+  if(!['owner','admin'].includes(c.get('role')))return fail(c,'Only organisation owners and administrators can view all memberships',403);
   const rows=await c.env.DB.prepare('SELECT m.user_id,u.display_name,u.email_normalized,m.role,m.status FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.organisation_id=? ORDER BY u.display_name').bind(c.get('organisationId')).all();
   return c.json({members:rows.results});
 });
@@ -257,6 +257,47 @@ app.get('/api/v1/organisations/:orgId/locations',async c=>{
     ?await c.env.DB.prepare('SELECT id,name,time_zone FROM locations WHERE organisation_id=? AND archived_at IS NULL ORDER BY name').bind(org).all()
     :await c.env.DB.prepare('SELECT l.id,l.name,l.time_zone FROM locations l JOIN location_access a ON a.organisation_id=l.organisation_id AND a.location_id=l.id WHERE l.organisation_id=? AND a.user_id=? AND l.archived_at IS NULL ORDER BY l.name').bind(org,user).all();
   return c.json({locations:rows.results});
+});
+// Assignment APIs keep staff and manager scope within a single organisation.
+app.get('/api/v1/organisations/:orgId/location-access',async c=>{
+  if(!['owner','admin'].includes(c.get('role')))return fail(c,'Not permitted',403);
+  const rows=await c.env.DB.prepare('SELECT a.location_id,a.user_id,u.email_normalized FROM location_access a JOIN users u ON u.id=a.user_id WHERE a.organisation_id=? ORDER BY a.location_id').bind(c.get('organisationId')).all();
+  return c.json({assignments:rows.results});
+});
+app.post('/api/v1/organisations/:orgId/location-access',async c=>{
+  if(!['owner','admin'].includes(c.get('role')))return fail(c,'Not permitted',403);
+  const x=await body(c),org=c.get('organisationId'),location=safeStr(x?.locationId,64),user=safeStr(x?.userId,64);
+  if(!location||!user)return fail(c,'Location and manager are required',422);
+  const member=await c.env.DB.prepare("SELECT role FROM memberships WHERE organisation_id=? AND user_id=? AND status='active'").bind(org,user).first() as {role:string}|null;
+  if(!member||member.role!=='manager')return fail(c,'An active manager membership is required',422);
+  const existing=await c.env.DB.prepare('SELECT id FROM locations WHERE organisation_id=? AND id=? AND archived_at IS NULL').bind(org,location).first();
+  if(!existing)return fail(c,'Location not found',404);
+  await c.env.DB.batch([
+    c.env.DB.prepare('INSERT OR IGNORE INTO location_access(organisation_id,location_id,user_id) VALUES(?,?,?)').bind(org,location,user),
+    c.env.DB.prepare('INSERT INTO audit_events(id,organisation_id,actor_user_id,action,resource_type,resource_id) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),org,c.get('userId'),'assign_manager','location',location)
+  ]);
+  return c.json({ok:true},201);
+});
+app.get('/api/v1/organisations/:orgId/employee-locations',async c=>{
+  if(!['owner','admin','manager'].includes(c.get('role')))return fail(c,'Not permitted',403);
+  const org=c.get('organisationId'),user=c.get('userId');
+  const rows=c.get('role')==='manager'
+    ?await c.env.DB.prepare('SELECT el.employee_id,el.location_id FROM employee_locations el JOIN location_access a ON a.organisation_id=el.organisation_id AND a.location_id=el.location_id WHERE el.organisation_id=? AND a.user_id=?').bind(org,user).all()
+    :await c.env.DB.prepare('SELECT employee_id,location_id FROM employee_locations WHERE organisation_id=?').bind(org).all();
+  return c.json({assignments:rows.results});
+});
+app.post('/api/v1/organisations/:orgId/employee-locations',async c=>{
+  if(!['owner','admin'].includes(c.get('role')))return fail(c,'Not permitted',403);
+  const x=await body(c),org=c.get('organisationId'),employee=safeStr(x?.employeeId,64),location=safeStr(x?.locationId,64);
+  if(!employee||!location)return fail(c,'Employee and location are required',422);
+  const employeeRow=await c.env.DB.prepare("SELECT id FROM employees WHERE organisation_id=? AND id=? AND employment_status='active'").bind(org,employee).first();
+  const locationRow=await c.env.DB.prepare('SELECT id FROM locations WHERE organisation_id=? AND id=? AND archived_at IS NULL').bind(org,location).first();
+  if(!employeeRow||!locationRow)return fail(c,'Employee or location not found',404);
+  await c.env.DB.batch([
+    c.env.DB.prepare('INSERT OR IGNORE INTO employee_locations(organisation_id,employee_id,location_id) VALUES(?,?,?)').bind(org,employee,location),
+    c.env.DB.prepare('INSERT INTO audit_events(id,organisation_id,actor_user_id,action,resource_type,resource_id) VALUES(?,?,?,?,?,?)').bind(crypto.randomUUID(),org,c.get('userId'),'assign_employee','location',location)
+  ]);
+  return c.json({ok:true},201);
 });
 app.post('/api/v1/organisations/:orgId/locations',async c=>{
   if(!['owner','admin'].includes(c.get('role')))return fail(c,'Only organisation owners and admins may create locations.',403);
@@ -300,7 +341,12 @@ app.post('/api/v1/organisations/:orgId/shifts',async c=>{
     const access=await c.env.DB.prepare('SELECT 1 FROM location_access WHERE organisation_id=? AND location_id=? AND user_id=?').bind(org,location,c.get('userId')).first();
     if(!access)return fail(c,'You do not manage this location',403);
   }
-  if(employee){const emp=await c.env.DB.prepare("SELECT id FROM employees WHERE organisation_id=? AND id=? AND employment_status='active'").bind(org,employee).first();if(!emp)return fail(c,'Employee not found',404);}
+  if(employee){
+    const emp=await c.env.DB.prepare("SELECT id FROM employees WHERE organisation_id=? AND id=? AND employment_status='active'").bind(org,employee).first();
+    if(!emp)return fail(c,'Employee not found',404);
+    const assigned=await c.env.DB.prepare('SELECT 1 FROM employee_locations WHERE organisation_id=? AND employee_id=? AND location_id=?').bind(org,employee,location).first();
+    if(!assigned)return fail(c,'Assign this employee to the selected location before scheduling them',422);
+  }
   await c.env.DB.prepare('INSERT INTO shifts(id,organisation_id,location_id,employee_id,starts_at_utc,ends_at_utc,unpaid_break_minutes) VALUES(?,?,?,?,?,?,?)').bind(id,org,location,employee,new Date(start).toISOString(),new Date(end).toISOString(),breaks).run();
   return c.json({shift:{id,status:'draft'}},201);
 });
