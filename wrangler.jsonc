@@ -18,5 +18,10 @@
     "run_worker_first": [
       "/api/*"
     ]
+  },
+  "keep_vars": true,
+  "vars": {
+    "APP_URL": "https://shiftledger.imdavidj13.workers.dev",
+    "MAIL_FROM": "ShiftLedger <onboarding@resend.dev>"
   }
 }
