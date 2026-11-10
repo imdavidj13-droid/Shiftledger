@@ -61,6 +61,25 @@ function VerificationPage({token}:{token:string}){
   <footer className="confirmation-footer">ShiftLedger · Secure account verification</footer>
  </main>;
 }
+// Visual-only routes let existing users review the confirmation layout without re-verifying.
+function VerificationPreview({failed}:{failed:boolean}){
+ return <main className="confirmation-page">
+  <header className="confirmation-header"><Brand/></header>
+  <div className="confirmation-content">
+   <section className="confirmation-card" aria-label="Verification design preview">
+    <div className="confirmation-preview-label">DESIGN PREVIEW — NO ACCOUNT CHANGES</div>
+    <div className="confirmation-icon">{failed?<AlertCircle size={48}/>:<CheckCircle2 size={48}/>}</div>
+    <div className="overline">SHIFTLEDGER / ACCOUNT VERIFICATION</div>
+    <h1>{failed?'Verification unsuccessful':'Email verified!'}</h1>
+    <p>{failed?'This verification link is invalid or has expired. Return to sign in and request a new link.':'Your email address has been confirmed successfully. You can now sign in and set up your organisation.'}</p>
+    {!failed&&<div className="confirmation-success"><CheckCircle2 size={21}/> Your account is ready for sign in.</div>}
+    <a className="btn primary confirmation-action" href="/">Continue to sign in <ArrowRight size={18}/></a>
+    {failed&&<p className="confirmation-help">If your link has expired, return to sign in and request a new verification email.</p>}
+   </section>
+  </div>
+  <footer className="confirmation-footer">ShiftLedger · Preview only — no verification request was made</footer>
+ </main>;
+}
 function Auth({onSuccess}:{onSuccess:()=>void}){
  const params=new URLSearchParams(window.location.search);
  const reset=params.get('reset');
@@ -126,6 +145,8 @@ function App(){
  useEffect(()=>{void refresh()},[]);
  async function logout(){try{await post('/auth/logout',{})}finally{setUser(null);setOrg(null);setOrgs([])}}
  if(verificationToken)return <VerificationPage token={verificationToken}/>;
+ if(window.location.pathname==='/preview/email-verified')return <VerificationPreview failed={false}/>;
+ if(window.location.pathname==='/preview/email-verification-failed')return <VerificationPreview failed={true}/>;
  if(loading)return <div className="loading"><Brand/><p>Connecting to your workspace…</p></div>;
  if(!user)return <>{error&&<div className="floating-error"><Alert message={error}/></div>}<Auth onSuccess={()=>void refresh()}/></>;
  if(!org)return <Onboard refresh={()=>void refresh()}/>;
