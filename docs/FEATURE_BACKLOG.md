@@ -13,6 +13,14 @@ Updated 10 November 2026. This is the primary implementation backlog for ChatGPT
 - Rate limits, CSRF/origin policies, session expiration/revocation, audit events, request correlation, basic monitoring and accessible errors.
 - Stable, responsive, accessible opaque forest-green/lime/ivory UI. No false demo data in production.
 
+### Locked owner decision — original five-step business setup (10 November 2026)
+- Replace the disconnected first-use business journey with a cohesive **five-step full-page ShiftLedger setup workspace**, inspired by general onboarding usability patterns but **not** copied from any competitor's wording, modal layout or illustrations. Use the existing opaque forest-green/lime/ivory visual system, an ownable progress navigator and a live setup summary.
+- Steps: **1. Your business** (reuse organisation identity, country/currency/timezone and scheduling preferences from registration; no repeated entry); **2. Your workplaces** (locations, branches and independent time zones); **3. How your team works** (departments and real job positions/skills, distinctly separate from admin/manager/employee security roles); **4. Bring your team together** (add/import staff, assign positions and locations, optional invitation without forcing outbound email); **5. Your first schedule** (real D1-backed draft rota, week/date selection, assigned or open shift, review and explicit publish action).
+- Treat this as a **business/manager experience only**, and reuse existing business onboarding data and the current organisation, including previously registered owners. Never duplicate the organisation or create synthetic employees/shift data. Owners with existing organisations must be able to enter or resume the wizard without resetting business settings.
+- Persist the wizard progress and each underlying business entity in D1, with transactional/idempotent writes; support skip/defer for truly optional inputs, resume after logout, stable deep routes for steps, back/forward navigation, accessibility, mobile layouts and clear failure/retry states.
+- **Distinction from RotaCloud:** do not implement a centred five-dot modal sequence, imitation illustrations, copywritten tutorial text or identical presentation. Build ShiftLedger's own full-page layout and original microcopy, with meaningful value at every stage rather than a decorative completion screen.
+- Test completed setup and interrupted/resumed setup, existing-organisation migration path, org/branch permissions, no duplicate entities, and explicit shift publishing.
+
 ### P1 exit gate (all required)
 - Complete registration, login, email verification/resend, password reset, profile, account recovery, organisation onboarding/editing and safe account lifecycle.
 - Owners can invite, resend/revoke, grant/revoke admin/manager/employee roles, and manage active and suspended memberships with correct security.
