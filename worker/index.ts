@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
-type Bindings = { DB: D1Database; RESEND_API_KEY?: string; MAIL_FROM?: string; APP_URL?: string };
+type Bindings = { DB: D1Database; EMAIL?: { send(message: {to:string;from:string;subject:string;text:string}):Promise<{messageId:string}> }; RESEND_API_KEY?: string; MAIL_FROM?: string; APP_URL?: string };
 type Vars = { userId: string; organisationId: string; role: string };
 const app = new Hono<{ Bindings: Bindings; Variables: Vars }>();
 const jsonError = (message: string, status: 400|401|403|404|409|422|429|500|503 = 400) => ({ error: message, status });
@@ -30,10 +30,34 @@ async function currentUser(c: any):Promise<{id:string;display_name:string;email_
   const token=getCookie(c,'sl_session');if(!token||!/^([a-f0-9]{64})$/.test(token))return null;
   return await c.env.DB.prepare('SELECT users.id,users.display_name,users.email_normalized FROM sessions JOIN users ON users.id=sessions.user_id WHERE sessions.token_hash=? AND sessions.expires_at>? AND users.email_verified_at IS NOT NULL').bind(await sha(token),isoNow()).first() as any;
 }
+function mailReady(env: Bindings) {
+  return Boolean(env.APP_URL && env.MAIL_FROM && (env.EMAIL || env.RESEND_API_KEY));
+}
 async function sendMail(c: any,email:string,subject:string,text:string) {
-  if(!c.env.RESEND_API_KEY||!c.env.MAIL_FROM||!c.env.APP_URL) return false;
-  const result=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+c.env.RESEND_API_KEY,'Content-Type':'application/json'},body:JSON.stringify({from:c.env.MAIL_FROM,to:[email],subject,text})});
-  return result.ok;
+  if(!mailReady(c.env)) return false;
+  // Primary: Cloudflare Email Sending binding, when attached to this Worker.
+  if(c.env.EMAIL) {
+    try {
+      await c.env.EMAIL.send({to:email,from:c.env.MAIL_FROM,subject,text});
+      return true;
+    } catch (error) {
+      console.error('Cloudflare Email Service failed',error);
+      // The optional fallback is intended for transient provider failures.
+    }
+  }
+  if(!c.env.RESEND_API_KEY) return false;
+  try {
+    const result=await fetch('https://api.resend.com/emails',{
+      method:'POST',
+      headers:{Authorization:'Bearer '+c.env.RESEND_API_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({from:c.env.MAIL_FROM,to:[email],subject,text})
+    });
+    if(!result.ok) console.error('Email fallback returned HTTP',result.status);
+    return result.ok;
+  } catch (error) {
+    console.error('Email fallback request failed',error);
+    return false;
+  }
 }
 async function tokenFor(c:any,userId:string,purpose:'verify_email'|'reset_password') {
   const raw=rnd();await c.env.DB.prepare('DELETE FROM auth_tokens WHERE user_id=? AND purpose=?').bind(userId,purpose).run();
@@ -61,7 +85,7 @@ app.use('/api/*',async(c,next)=>{
 });
 app.get('/api/health',c=>c.json({ok:true,service:'shiftledger',api:'v1'}));
 app.post('/api/v1/auth/register',async c=>{
-  if(!c.env.RESEND_API_KEY||!c.env.MAIL_FROM||!c.env.APP_URL)return fail(c,'Email delivery has not been configured by the administrator.',503);
+  if(!mailReady(c.env))return fail(c,'Email delivery has not been configured by the administrator.',503);
   const x=await body(c);if(!x)return fail(c,'Invalid JSON');
   const email=safeStr(x.email,254).toLowerCase(),name=safeStr(x.name,80),password=x.password;
   if(!isEmail(email)||name.length<2||typeof password!=='string'||!passValid(password))return fail(c,'Enter a name, valid email and a password of 12–128 characters.',422);
@@ -77,7 +101,7 @@ app.post('/api/v1/auth/register',async c=>{
   return c.json({ok:true,message:'Check your email for a verification link.'},201);
 });
 app.post('/api/v1/auth/resend-verification',async c=>{
-  if(!c.env.RESEND_API_KEY||!c.env.MAIL_FROM||!c.env.APP_URL)return fail(c,'Email delivery is not configured.',503);
+  if(!mailReady(c.env))return fail(c,'Email delivery is not configured.',503);
   const x=await body(c),email=safeStr(x?.email,254).toLowerCase();
   if(!isEmail(email))return fail(c,'Enter a valid email address',422);
   const ip=c.req.header('CF-Connecting-IP')||'unknown';
@@ -128,7 +152,7 @@ app.post('/api/v1/auth/forgot-password',async c=>{
   if(!isEmail(email))return fail(c,'Invalid email',422);
   if(!await rateLimit(c,'reset:'+email,4))return fail(c,'Too many requests',429);
   const row=await c.env.DB.prepare('SELECT id FROM users WHERE email_normalized=?').bind(email).first() as {id:string}|null;
-  if(row&&c.env.APP_URL&&c.env.RESEND_API_KEY&&c.env.MAIL_FROM){
+  if(row&&mailReady(c.env)){
     const token=await tokenFor(c,row.id,'reset_password');
     await sendMail(c,email,'Reset your ShiftLedger password','Reset your password: '+c.env.APP_URL.replace(/\/$/,'')+'/?reset='+token);
   }
