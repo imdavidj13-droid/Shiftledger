@@ -8,6 +8,24 @@ type Employee = {id:string;display_name:string;employment_status:string};
 type Shift = {id:string;location_id:string;employee_id:string|null;starts_at_utc:string;ends_at_utc:string;status:string};
 type AuthMode='login'|'register'|'forgot'|'reset'|'pending';
 type Page='Overview'|'Schedule'|'Team'|'Timesheets'|'Leave'|'Shift swaps'|'Reports'|'Settings';
+
+const PAGE_SLUGS: Record<Page,string> = {
+ Overview:'overview',Schedule:'schedule',Team:'team',Timesheets:'timesheets',Leave:'leave','Shift swaps':'shift-swaps',Reports:'reports',Settings:'settings'
+};
+function appPath(organisationId:string,page:Page):string {
+ return '/app/'+encodeURIComponent(organisationId)+'/'+PAGE_SLUGS[page];
+}
+function pathOrganisation():string|null {
+ const match=window.location.pathname.match(/^\/app\/([^/]+)(?:\/[^/]+)?\/?$/);
+ if(!match)return null;
+ try{return decodeURIComponent(match[1]);}catch{return null;}
+}
+function pageForPath(organisationId:string):Page {
+ const match=window.location.pathname.match(/^\/app\/([^/]+)\/([^/]+)\/?$/);
+ if(!match||decodeURIComponent(match[1])!==organisationId)return 'Overview';
+ return (Object.keys(PAGE_SLUGS) as Page[]).find(p=>PAGE_SLUGS[p]===match[2])||'Overview';
+}
+
 const nav: {name:Page;icon:typeof LayoutDashboard}[]=[
  {name:'Overview',icon:LayoutDashboard},{name:'Schedule',icon:CalendarDays},{name:'Team',icon:UsersRound},{name:'Timesheets',icon:Clock3},{name:'Leave',icon:CalendarCheck2},{name:'Shift swaps',icon:ArrowLeftRight},{name:'Reports',icon:BarChart3},{name:'Settings',icon:Settings2}
 ];
@@ -83,16 +101,21 @@ function VerificationPreview({failed}:{failed:boolean}){
 function Auth({onSuccess}:{onSuccess:()=>void}){
  const params=new URLSearchParams(window.location.search);
  const reset=params.get('reset');
- const [mode,setMode]=useState<AuthMode>(reset?'reset':'login');
+ const [mode,setMode]=useState<AuthMode>(reset?'reset':window.location.pathname==='/register'?'register':window.location.pathname==='/forgot-password'?'forgot':'login');
  const [email,setEmail]=useState(''),[password,setPassword]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
+ const selectMode=(next:AuthMode)=>{
+  setMode(next);setError('');setMessage('');
+  const path=next==='register'?'/register':next==='forgot'?'/forgot-password':next==='reset'?'/reset-password':next==='pending'?'/check-email':'/sign-in';
+  window.history.pushState({},'',path);
+ };
  async function submit(e:FormEvent){e.preventDefault();setError('');setMessage('');setBusy(true);
   try{
-   if(mode==='register'){const r=await post('/auth/register',{email,password});setMessage(r.message);setMode('pending');setPassword('')}
+   if(mode==='register'){const r=await post('/auth/register',{email,password});setMessage(r.message);selectMode('pending');setMessage(r.message);setPassword('')}
    else if(mode==='login'){await post('/auth/login',{email,password});onSuccess()}
    else if(mode==='pending'){const r=await post('/auth/resend-verification',{email});setMessage(r.message)}
    else if(mode==='forgot'){const r=await post('/auth/forgot-password',{email});setMessage(r.message)}
-   else{await post('/auth/reset-password',{token:reset,password});window.history.replaceState({},'',window.location.pathname);setMessage('Password updated. Sign in now.');setMode('login');setPassword('')}
+   else{await post('/auth/reset-password',{token:reset,password});window.history.replaceState({},'',window.location.pathname);setMessage('Password updated. Sign in now.');selectMode('login');setMessage('Password updated. Sign in now.');setPassword('')}
   }catch(e){setError((e as Error).message)}finally{setBusy(false)}
  }
  return <div className="auth-layout"><div className="auth-art"><Brand/><div><span className="overline">THE WORKFORCE PLATFORM</span><h1>Run your team.<br/>Own your time.</h1><p>Scheduling, time tracking and team management. One secure home for your organisation.</p><div className="auth-points"><span>01 / Plan smarter</span><span>02 / Stay organised</span><span>03 / Grow together</span></div></div><small>SHIFTLEDGER — BUILT FOR REAL TEAMS</small></div>
@@ -102,7 +125,7 @@ function Auth({onSuccess}:{onSuccess:()=>void}){
  {mode!=='reset'&&<Field label={mode==='register'?'Work email address':'Email address'}><input type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)}/></Field>}
  {!['forgot','pending'].includes(mode)&&<Field label="Password"><input type="password" required minLength={mode==='login'?1:12} maxLength={128} autoComplete={mode==='login'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)}/></Field>}
  <button className="btn primary full" disabled={busy}>{busy?'Working…':mode==='login'?'Sign in':mode==='register'?'Create account':mode==='forgot'?'Send reset link':mode==='pending'?'Resend verification email':'Update password'} <ArrowRight size={18}/></button></form>
- <div className="auth-links">{mode==='login'?<><button onClick={()=>{setMode('register');setError('');setMessage('')}}>Create an account</button><button onClick={()=>{setMode('forgot');setError('');setMessage('')}}>Forgot password?</button></>:<button onClick={()=>{setMode('login');setError('');setMessage('')}}>Back to sign in</button>}</div>
+ <div className="auth-links">{mode==='login'?<><button onClick={()=>selectMode('register')}>Create an account</button><button onClick={()=>selectMode('forgot')}>Forgot password?</button></>:<button onClick={()=>selectMode('login')}>Back to sign in</button>}</div>
  </div><div className="auth-copyright">Secure accounts · Organisation-level data separation</div></div></div>
 }
 const countries=[
@@ -171,7 +194,19 @@ function Onboard({refresh}:{refresh:()=>void}){
 function Stat({title,value,note}:{title:string;value:string|number;note:string}){return <div className="stat-card"><div className="stat-label">{title}</div><strong>{value}</strong><span>{note}</span></div>}
 function Empty({icon,heading,description}:{icon:ReactNode;heading:string;description:string}){return <div className="empty">{icon}<h3>{heading}</h3><p>{description}</p></div>}
 function Dashboard({user,org,organisations,onLogout,onSwitch}:{user:User;org:Org;organisations:Org[];onLogout:()=>void;onSwitch:(id:string)=>void}){
- const [page,setPage]=useState<Page>('Overview'),[error,setError]=useState(''),[success,setSuccess]=useState('');
+ const [page,setPage]=useState<Page>(()=>pageForPath(org.id)),[error,setError]=useState(''),[success,setSuccess]=useState('');
+ const navigate=(next:Page)=>{
+  window.history.pushState({},'',appPath(org.id,next));
+  setPage(next);setError('');setSuccess('');
+ };
+ useEffect(()=>{
+  const sync=()=>setPage(pageForPath(org.id));
+  window.addEventListener('popstate',sync);
+  if(pathOrganisation()!==org.id||window.location.pathname!==appPath(org.id,pageForPath(org.id))){
+   window.history.replaceState({},'',appPath(org.id,pageForPath(org.id)));
+  }
+  return()=>window.removeEventListener('popstate',sync);
+ },[org.id]);
  const [locations,setLocations]=useState<Location[]>([]),[employees,setEmployees]=useState<Employee[]>([]),[shifts,setShifts]=useState<Shift[]>([]);
  const [locationName,setLocationName]=useState(''),[employeeName,setEmployeeName]=useState(''),[zone,setZone]=useState(org.time_zone);
  const [newLocation,setNewLocation]=useState(''),[newEmployee,setNewEmployee]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState('');
@@ -185,7 +220,7 @@ function Dashboard({user,org,organisations,onLogout,onSwitch}:{user:User;org:Org
  useEffect(()=>{void reload()},[org.id]);
  async function action(fn:()=>Promise<any>,done:string){setBusy(true);setError('');setSuccess('');try{await fn();setSuccess(done);await reload()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
  const base='/organisations/'+org.id;
- return <div className="app"><aside className="sidebar"><Brand/><div className="workspace"><div className="workspace-icon">{org.name.charAt(0).toUpperCase()}</div><div><strong>{org.name}</strong><small>{org.role}</small></div></div>{organisations.length>1&&<select className="org-picker" aria-label="Switch organisation" value={org.id} onChange={e=>onSwitch(e.target.value)}>{organisations.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select>}<div className="nav-label">WORKSPACE</div><nav>{nav.map(({name,icon:Icon})=><button key={name} className={'nav-item '+(page===name?'selected':'')} onClick={()=>{setPage(name);setError('');setSuccess('')}}><Icon size={19}/><span>{name}</span></button>)}</nav><div className="sidebar-bottom"><div className="sidebar-callout"><ShieldCheck size={23}/><strong>Your data, your organisation.</strong><span>All workspace requests are checked on the server.</span></div><button className="profile" onClick={onLogout}><span className="profile-icon">{user.name.charAt(0).toUpperCase()}</span><span><strong>{user.name}</strong><small>Sign out</small></span><LogOut size={18}/></button></div></aside>
+ return <div className="app"><aside className="sidebar"><Brand/><div className="workspace"><div className="workspace-icon">{org.name.charAt(0).toUpperCase()}</div><div><strong>{org.name}</strong><small>{org.role}</small></div></div>{organisations.length>1&&<select className="org-picker" aria-label="Switch organisation" value={org.id} onChange={e=>onSwitch(e.target.value)}>{organisations.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}</select>}<div className="nav-label">WORKSPACE</div><nav>{nav.map(({name,icon:Icon})=><button key={name} className={'nav-item '+(page===name?'selected':'')} onClick={()=>navigate(name)}><Icon size={19}/><span>{name}</span></button>)}</nav><div className="sidebar-bottom"><div className="sidebar-callout"><ShieldCheck size={23}/><strong>Your data, your organisation.</strong><span>All workspace requests are checked on the server.</span></div><button className="profile" onClick={onLogout}><span className="profile-icon">{user.name.charAt(0).toUpperCase()}</span><span><strong>{user.name}</strong><small>Sign out</small></span><LogOut size={18}/></button></div></aside>
  <div className="main"><header className="topbar"><div className="breadcrumb"><span>{org.name}</span><b>/</b><strong>{page}</strong></div><div className="top-right"><span className="role-tag">{org.role}</span><span className="profile-icon">{user.name.charAt(0).toUpperCase()}</span></div></header>
  <main className="page"><div className="overline">SHIFTLEDGER / {page.toUpperCase()}</div><div className="page-heading"><div><h1>{page==='Overview'?'Your workforce, organised.':page}</h1><p>{page==='Overview'?'Your live organisation overview.':'Manage '+page.toLowerCase()+' for '+org.name+'.'}</p></div><button className="btn outline" onClick={()=>void reload()}><RefreshCcw size={17}/> Refresh</button></div>
  {error&&<Alert message={error}/ >}{success&&<Alert message={success} kind="success"/>}
@@ -199,7 +234,7 @@ function Dashboard({user,org,organisations,onLogout,onSwitch}:{user:User;org:Org
 function App(){
  const verificationToken=new URLSearchParams(window.location.search).get('verify');
  const [user,setUser]=useState<User|null>(null),[orgs,setOrgs]=useState<Org[]>([]),[org,setOrg]=useState<Org|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
- async function refresh(){try{const x=await api<{user:User}>('/auth/me');setUser(x.user);const y=await api<{organisations:Org[]}>('/organisations');setOrgs(y.organisations);setOrg(current=>y.organisations.find(o=>o.id===current?.id)||y.organisations[0]||null);setError('')}catch(e){setUser(null);setOrgs([]);setOrg(null);const msg=(e as Error).message;if(msg!=='Sign in required')setError(msg)}finally{setLoading(false)}}
+ async function refresh(){try{const x=await api<{user:User}>('/auth/me');setUser(x.user);const y=await api<{organisations:Org[]}>('/organisations');setOrgs(y.organisations);setOrg(current=>y.organisations.find(o=>o.id===pathOrganisation())||y.organisations.find(o=>o.id===current?.id)||y.organisations[0]||null);setError('')}catch(e){setUser(null);setOrgs([]);setOrg(null);const msg=(e as Error).message;if(msg!=='Sign in required')setError(msg)}finally{setLoading(false)}}
  useEffect(()=>{void refresh()},[]);
  async function logout(){try{await post('/auth/logout',{})}finally{setUser(null);setOrg(null);setOrgs([])}}
  if(verificationToken)return <VerificationPage token={verificationToken}/>;
@@ -208,6 +243,6 @@ function App(){
  if(loading)return <div className="loading"><Brand/><p>Connecting to your workspace…</p></div>;
  if(!user)return <>{error&&<div className="floating-error"><Alert message={error}/></div>}<Auth onSuccess={()=>void refresh()}/></>;
  if(!org)return <Onboard refresh={()=>void refresh()}/>;
- return <Dashboard key={org.id} user={user} org={org} organisations={orgs} onLogout={()=>void logout()} onSwitch={id=>setOrg(orgs.find(o=>o.id===id)||org)}/>;
+ return <Dashboard key={org.id} user={user} org={org} organisations={orgs} onLogout={()=>void logout()} onSwitch={id=>{const next=orgs.find(o=>o.id===id);if(next){window.history.pushState({},'',appPath(id,'Overview'));setOrg(next);}}}/>;
 }
 export default App;
