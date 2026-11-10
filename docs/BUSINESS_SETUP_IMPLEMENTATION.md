@@ -1,3 +1,31 @@
+# Business setup integration status — 10 November 2026
+
+**Current status:** Connected to the authenticated organisation dashboard on `main` with a permanent `/app/:organisationId/setup` route and `?step=2` through `?step=5` query navigation. Dashboard owner/admin sees an **Open five-step setup** link in Getting started. Existing organisation and canonical D1 records are reused. The employee-facing application is not implemented.
+
+**Commits:** `737687f` (durable step links), `612c4f7` (setup page route), `19b4a70` (dashboard integration). These were connector commits during parallel Work activity; the complete production build, test suite, deployment and owner acceptance remain unverified at the time of this note. Do not claim full five-step completion.
+
+## Verified implementation boundaries
+
+- Stage 1: PATCH existing organisation settings, no new business registration.
+- Stage 2: use existing location directory / creation API and branch time zones.
+- Stage 3: explicit guarded placeholder for departments/positions; a proper catalogue API, data model and editor are still required.
+- Stage 4: create employee record at selected location without automatic invitation.
+- Stage 5: genuine rota creation URL, no automatic publication.
+- Current step in stable URL; back/forward and refresh retain the stage, but no separate D1 progress/completed-steps tracking yet.
+- No database migration introduced by this integration.
+
+## Remaining priority work
+
+1. Run a clean `npm ci`, `npm run typecheck`, `npm run build`, `npm test`, verify GitHub CI and the deployed Worker release; fix any issue before claiming the feature is live.
+2. Implement saved per-organisation stage progression/resume using additive D1 migration, with explicit user approval before production application.
+3. Finish real job position + department catalogues and employee assignments with cross-tenant and role checks.
+4. Full API/integration/browser tests for existing organisations, branch roles, refresh, interrupted setup, replays/duplicate submission and first rota handoff.
+5. Review active Work's changing API contracts before integrating any new schema; preserve live organisation and shifts.
+
+---
+
+## Original component notes
+
 # Five-stage business setup — integration notes
 
 Created 10 November 2026 while another ChatGPT Work session was editing the main application.
