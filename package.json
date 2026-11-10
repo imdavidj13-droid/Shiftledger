@@ -10,21 +10,29 @@
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply shiftledger-db --local",
     "deploy": "npm run build && wrangler deploy",
-    "db:migrate:remote": "wrangler d1 migrations apply shiftledger-db --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply shiftledger-db --remote",
+    "test": "playwright test",
+    "verify": "npm run typecheck && npm run build && npm test",
+    "staging": "node scripts/staging.mjs"
   },
   "dependencies": {
+    "@js-temporal/polyfill": "^0.5.1",
     "hono": "^4.10.0",
+    "lucide-react": "^0.468.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "lucide-react": "^0.468.0"
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261109.1",
+    "@playwright/test": "^1.65.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.1.0",
     "typescript": "~5.9.3",
     "vite": "^7.2.0",
     "wrangler": "^4.45.0"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }
