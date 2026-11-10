@@ -5,6 +5,7 @@ import { registerLeave } from './leave';
 import { registerTimekeeping } from './timekeeping';
 import { registerSwaps } from './swaps';
 import { registerStaff } from './staff';
+import { registerShiftTemplates } from './shift-templates';
 import { registerInvitations } from './invitations';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
@@ -133,11 +134,11 @@ app.get('/api/v1/ready',async c=>{
       FROM organisations o, users u, sessions, auth_tokens, auth_rate_limits,
       locations, employees, employee_locations, location_access, memberships, shifts, audit_events, invitations, invitation_locations LIMIT 0`).all();
     const tables = (await c.env.DB.prepare(`SELECT name FROM sqlite_master WHERE type='table'
-      AND name IN ('shift_claims','leave_requests','time_entries','shift_swaps','employee_profiles')`).all<{name:string}>()).results;
+      AND name IN ('shift_claims','leave_requests','time_entries','shift_swaps','employee_profiles','shift_templates')`).all<{name:string}>()).results;
     const names = new Set(tables.map(table=>table.name));
     return c.json({ok:true,features:{
       openShifts:names.has('shift_claims'),leave:names.has('leave_requests'),timekeeping:names.has('time_entries'),
-      shiftSwaps:names.has('shift_swaps'),staffProfiles:names.has('employee_profiles')
+      shiftSwaps:names.has('shift_swaps'),staffProfiles:names.has('employee_profiles'),shiftTemplates:names.has('shift_templates')
     }});
   } catch {
     console.error(JSON.stringify({event:'database_not_ready',requestId:c.get('requestId')}));
@@ -521,6 +522,7 @@ registerLeave(app);
 registerTimekeeping(app);
 registerSwaps(app);
 registerStaff(app);
+registerShiftTemplates(app);
 registerInvitations(app, currentUser);
 app.onError((_error,c)=>{
   console.error(JSON.stringify({event:'unexpected_api_error',requestId:c.get('requestId'),method:c.req.method,versionId:c.env.CF_VERSION_METADATA?.id}));

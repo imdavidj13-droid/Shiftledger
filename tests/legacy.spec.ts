@@ -7,7 +7,7 @@ test('current Worker keeps core workflows working against pre-feature D1', async
   const ready = await request.get('/api/v1/ready');
   expect(ready.status()).toBe(200);
   expect((await ready.json()).features).toEqual({
-    openShifts:false, leave:false, timekeeping:false, shiftSwaps:false, staffProfiles:false
+    openShifts:false, leave:false, timekeeping:false, shiftSwaps:false, staffProfiles:false, shiftTemplates:false
   });
   expect((await request.get('/api/v1/auth/me',{headers})).status()).toBe(200);
   const staff = await request.get(org + '/employees/shared',{headers});
@@ -22,7 +22,7 @@ test('current Worker keeps core workflows working against pre-feature D1', async
   expect((await request.post(org + '/shifts/' + shift.id + '/publish',{headers,data:{revision:1}})).status()).toBe(200);
   const rota = await request.get(org + '/shifts?from=2044-02-04T00:00:00Z&to=2044-02-05T00:00:00Z',{headers});
   expect((await rota.json()).shifts).toMatchObject([{id:shift.id,status:'published',is_open:0}]);
-  for (const module of ['leave','timesheets','shift-swaps']) {
+  for (const module of ['leave','timesheets','shift-swaps','shift-templates']) {
     expect((await request.get(org + '/' + module,{headers})).status()).toBe(503);
   }
 });

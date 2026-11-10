@@ -25,8 +25,10 @@ Updated 10 November 2026. The master roadmap remains [FEATURE_BACKLOG.md](FEATUR
 - The Team directory links to permanent staff profiles. Owners and administrators can edit employee names, employment status, department and position labels, and a primary branch. Managers see only profiles and branch assignments they manage. Upcoming shifts and open time entries block inactivation.
 - [Staff profiles (9f9585d)](https://github.com/imdavidj13-droid/Shiftledger/commit/9f9585dd0eda2e311d916107eb42ed4c340bec9f).
 - Staff profiles passed `npm run verify` (41 tests) and Wrangler production dry-run. Migration `0010_staff_profiles.sql` awaits production approval. Core name and employment status edits work before that migration. Reusable department and position catalogues and the five-step business setup remain open.
+- [Release verification (7693dab)](https://github.com/imdavidj13-droid/Shiftledger/commit/7693daba699e2367ed2b68985b86fa5de30d3177) passed the five live read-only smoke checks. Cloudflare returned Worker version `19e1bc86-ede0-4bb7-b51c-8ebd023454bc` and confirmed the new D1 feature schemas were pending. [GitHub Actions run](https://github.com/imdavidj13-droid/Shiftledger/actions/runs/42788883107).
 - Release checks now include a production-configuration dry-run, full additive upgrade coverage, 41 full-schema tests and a separate legacy-schema test. The tagged Worker health response and read-only smoke command are documented in [DEPLOYMENT.md](DEPLOYMENT.md).
-- Leave balances, availability/position eligibility, notification delivery, editable recurring series, reusable templates and remaining P0–P3 release gates are still open. Hosted staging is outside the current deployment policy.
+- Schedulers can create, edit and archive branch-local shift templates and apply them to real draft shifts. Templates preserve wall-clock time, unpaid breaks and overnight end dates. The manager workflow and branch boundaries passed 43 full-schema tests, one legacy-schema test and a production dry-run. Migration `0011_shift_templates.sql` awaits production approval.
+- Leave balances, availability/position eligibility, notification delivery, editable recurring series, multi-shift templates and remaining P0–P3 release gates are still open. Hosted staging is outside the current deployment policy.
 
 ## Verified in local Workers and D1
 
@@ -57,5 +59,5 @@ Browser and API fixtures contain synthetic data. Local tests in the Work environ
 1. Record the live Worker version and production migration list, validate a recovery bookmark and obtain explicit approval for the pending migrations. Confirm the owner can sign in and reopen the existing organisation. Hosted staging is outside the current policy.
 2. Verify delivery of registration, recovery and invitations with a customer-capable sender. Current invitation links can be copied manually. Review legacy password-storage upgrades, account lifecycle, production alerting and release gate settings.
 3. Finish the five-step business setup, reusable department and position catalogues, role changes, ownership transfer and account email change/export/deletion. The standalone setup component on main still needs integration, progress persistence and end-to-end testing.
-4. Finish editable recurring series, reusable shift templates, bulk edits, availability and position rules, published shift revision, and schedule notifications.
+4. Finish editable recurring series, multi-shift templates, bulk edits, availability and position rules, published shift revision, and schedule notifications.
 5. Finish saved pay periods, timesheet reopening and rounding, leave balances and coverage workflows. The dedicated worker interface is a later milestone.

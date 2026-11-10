@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, write } from './api';
 import { RotaBatch } from './RotaBatch';
+import type { ShiftTemplate } from './RotaTemplates';
 import type { Location, Org } from './Locations';
 import { appPath, go, useRoute } from './routes';
 import { branchInstant, branchWallTime, formatShiftTime, formatShiftClock, isRepeatedTime, moveWallTime, rotaDay, rotaMonth, rotaWeek, shiftOccurrence } from './time';
@@ -74,6 +75,7 @@ export function Rota(props: Props) {
   const day = rotaDay(params.get('date'), zone);
   const days = view === 'month' ? month.days : view === 'day' ? [day] : week.days;
   const date = view === 'month' ? month.month : view === 'day' ? day.date : week.start;
+  const focusDate = view === 'month' ? (month.today.startsWith(date) ? month.today : days[0].date) : date;
   const period = view === 'month' ? month : view === 'day' ? day : week;
   const manage = org.role !== 'employee';
   const base = '/organisations/' + org.id + '/shifts';
@@ -86,37 +88,45 @@ export function Rota(props: Props) {
   };
   const [result, setResult] = useState<ShiftPage | null>(null);
   const [record, setRecord] = useState<Shift | null>(null);
+  const [preset, setPreset] = useState<ShiftTemplate | null>(null);
   const [loadedPath, setLoadedPath] = useState('');
   const [error, setError] = useState('');
   const cursor = view === 'week' && !isBulk ? params.get('cursor') : null;
   const copyId = resourceId === 'new' ? params.get('copy') : null;
   const copyEndpoint = copyId ? base + '/' + encodeURIComponent(copyId) : null;
+  const presetId = resourceId === 'new' && !copyId ? params.get('template') : null;
+  const presetEndpoint = presetId ? '/organisations/' + org.id + '/shift-templates/' + encodeURIComponent(presetId) : null;
+  const editorSource = copyEndpoint || presetEndpoint;
   const query = new URLSearchParams({ from: days[0].from, to: days[days.length - 1].to });
   if (locationFilter) query.set('location', locationFilter);
   if (cursor) query.set('cursor', cursor);
   const queryString = query.toString();
   const endpoint = shiftId ? base + '/' + shiftId : base + '?' + queryString;
   const paginate = view === 'week' && !isBulk;
-  const loadKey = copyEndpoint || (shiftId ? endpoint : String(paginate) + ':' + endpoint);
+  const loadKey = editorSource || (shiftId ? endpoint : String(paginate) + ':' + endpoint);
 
   useEffect(() => {
     setError('');
-    if (shiftId === 'new' && !copyEndpoint) return;
+    if (shiftId === 'new' && !editorSource) return;
     const controller = new AbortController();
     const { signal } = controller;
-    const load = shiftId
+    const load = presetEndpoint
+      ? api<{ template: ShiftTemplate }>(presetEndpoint, { signal }).then(data => { if (!signal.aborted) setPreset(data.template); })
+      : shiftId
       ? api<{ shift: Shift }>(copyEndpoint || endpoint, { signal }).then(data => { if (!signal.aborted) setRecord(data.shift); })
       : loadShifts(base, new URLSearchParams(queryString), paginate, signal).then(data => { if (!signal.aborted) setResult(data); });
     void load.catch(reason => { if (!signal.aborted) setError(reason.message); })
       .finally(() => { if (!signal.aborted) setLoadedPath(loadKey); });
     return () => controller.abort();
-  }, [base, endpoint, shiftId, copyEndpoint, queryString, paginate, loadKey]);
+  }, [base, endpoint, shiftId, copyEndpoint, queryString, paginate, loadKey, editorSource, presetEndpoint]);
 
   if (resourceId === 'new') return <><a className="btn outline" href={href()}>Back to rota</a>
     {!manage ? <p className="alert error" role="alert">Only schedulers can create shifts.</p> :
-      copyEndpoint && loadedPath !== copyEndpoint ? <p role="status">Loading shift template…</p> :
+      editorSource && loadedPath !== editorSource ? <p role="status">Loading shift template…</p> :
       error ? <p className="alert error" role="alert">{error}</p> :
-      <ShiftEditor key={copyEndpoint || 'new'} {...props} endpoint={base} initialDate={view === 'day' ? day.date : undefined} template={copyEndpoint ? record || undefined : undefined}
+      <ShiftEditor key={editorSource || 'new'} {...props} endpoint={base}
+        initialDate={presetEndpoint ? focusDate : view === 'day' ? day.date : undefined}
+        template={copyEndpoint ? record || undefined : undefined} preset={presetEndpoint ? preset || undefined : undefined}
         onSaved={id => go(href(id), true)}/>}</>;
   if (loadedPath !== loadKey) return <p role="status">Loading rota…</p>;
   if (error) return <><p className="alert error" role="alert">{error}</p><a className="btn outline" href={href()}>Back to rota</a></>;
@@ -137,7 +147,6 @@ export function Rota(props: Props) {
       {...props} endpoint={endpoint} shift={record} onSaved={async () => setRecord((await api<{ shift: Shift }>(endpoint)).shift)}/>}</>;
 
   const shifts = [...(result?.shifts ?? [])].reverse();
-  const focusDate = view === 'month' ? (month.today.startsWith(date) ? month.today : days[0].date) : date;
   const today = month.today;
   return <section className="rota">
     <div className="rota-toolbar">
@@ -152,6 +161,7 @@ export function Rota(props: Props) {
         <a className="btn outline" href={href(undefined, view, view === 'month' ? today.slice(0, 7) : today)}>{view === 'week' ? 'This week' : 'Today'}</a>
         <a className="btn outline" href={href(undefined, view, period.next)}>Next {view}</a>
         {manage && view === 'week' && <a className="btn outline" href={href('bulk')}>Copy or publish shifts</a>}
+        {manage && <a className="btn outline" href={href('templates')}>Shift templates</a>}
         {manage && <a className="btn primary" href={href('new')}>Create draft shift</a>}
       </div>
     </div>
@@ -264,20 +274,20 @@ function ShiftClaims({ endpoint, onChanged }: { endpoint: string; onChanged: () 
   </section>;
 }
 
-function ShiftEditor({ locations, employees, assignments, locationFilter, openShifts, endpoint, shift, template, initialDate, onSaved }: Props & {
-  endpoint: string; shift?: Shift; template?: Shift; initialDate?: string; onSaved: (id: string) => void | Promise<void>;
+function ShiftEditor({ locations, employees, assignments, locationFilter, openShifts, endpoint, shift, template, preset, initialDate, onSaved }: Props & {
+  endpoint: string; shift?: Shift; template?: Shift; preset?: ShiftTemplate; initialDate?: string; onSaved: (id: string) => void | Promise<void>;
 }) {
   const initial = shift || template;
-  const [locationId, setLocationId] = useState(initial?.location_id || locationFilter);
+  const [locationId, setLocationId] = useState(initial?.location_id || preset?.location_id || locationFilter);
   const [employeeId, setEmployeeId] = useState(initial?.employee_id || '');
   const [isOpen, setIsOpen] = useState(Boolean(initial?.is_open));
-  const [start, setStart] = useState(initial ? branchWallTime(initial.starts_at_utc, initial.time_zone) : initialDate ? initialDate + 'T09:00' : '');
-  const [end, setEnd] = useState(initial ? branchWallTime(initial.ends_at_utc, initial.time_zone) : initialDate ? initialDate + 'T17:00' : '');
+  const [start, setStart] = useState(initial ? branchWallTime(initial.starts_at_utc, initial.time_zone) : initialDate ? initialDate + 'T' + (preset?.start_time ?? '09:00') : '');
+  const [end, setEnd] = useState(initial ? branchWallTime(initial.ends_at_utc, initial.time_zone) : initialDate ? moveWallTime(initialDate + 'T' + (preset?.end_time ?? '17:00'), preset?.end_day_offset ?? 0) : '');
   const [startOccurrence, setStartOccurrence] = useState(initial ? shiftOccurrence(initial.starts_at_utc, initial.time_zone) : 'earlier');
   const [endOccurrence, setEndOccurrence] = useState(initial ? shiftOccurrence(initial.ends_at_utc, initial.time_zone) : 'earlier');
   const [occurrences, setOccurrences] = useState(1);
   const [operationId] = useState(() => crypto.randomUUID());
-  const [breakMinutes, setBreakMinutes] = useState(initial?.unpaid_break_minutes ?? 0);
+  const [breakMinutes, setBreakMinutes] = useState(initial?.unpaid_break_minutes ?? preset?.unpaid_break_minutes ?? 0);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const zone = locations.find(location => location.id === locationId)?.time_zone || '';
@@ -309,6 +319,7 @@ function ShiftEditor({ locations, employees, assignments, locationFilter, openSh
     <div className="panel-title"><h2>{shift ? 'Edit draft shift' : template ? 'Duplicate shift as draft' : 'Create draft shift'}</h2></div>
     <form className="form-stack pad" onSubmit={save}>
       {error && <p className="alert error" role="alert">{error}</p>}
+      {preset && <p className="form-hint">Using {preset.name}. Review the date and choose a staff assignment before publishing.</p>}
       {template && <p className="form-hint">Copied from an existing shift. Review the date and time before creating a separate draft; overlapping shifts are still prevented.</p>}
       <label className="field">Location<select required value={locationId} onChange={event => {
         setLocationId(event.target.value); setEmployeeId(''); setStartOccurrence('earlier'); setEndOccurrence('earlier');

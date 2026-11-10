@@ -112,7 +112,8 @@ See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope an
 - [ ] Additional list view and team or role filters.
 - [x] Create, edit and discard draft shifts with unpaid breaks and concurrent-edit protection.
 - [x] Duplicate shifts, create up to 12 weekly draft occurrences, copy a selected week of shifts and publish batches. Branch-local hours are preserved across DST.
-- [ ] Saved recurring series, rota templates, bulk edits, skill/position requirements and shift notes.
+- [x] Reusable branch-local shift templates with creation, editing, archiving and prefilled draft creation, including overnight hours.
+- [ ] Activate templates with production migration 0011. Finish editable recurring series, multi-shift templates, bulk edits, skill/position requirements and shift notes.
 - [x] Permissioned single-shift publishing and cancellation with revisions, audit events and employee visibility.
 - [ ] Review state, updates to published shifts and idempotent staff notifications.
 - [ ] Conflict engine: overlapping shifts across locations, unavailability, approved leave, breaks, min/max hours, overtime warning, optional rest requirements, working-time rules as *configurable warnings* until jurisdiction-reviewed.

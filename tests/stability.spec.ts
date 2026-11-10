@@ -14,7 +14,7 @@ test('deployed asset routing, health and API error envelope', async ({ request }
   const readiness = await request.get('/api/v1/ready');
   expect(readiness.ok()).toBe(true);
   expect((await readiness.json()).features).toEqual({
-    openShifts:true, leave:true, timekeeping:true, shiftSwaps:true, staffProfiles:true
+    openShifts:true, leave:true, timekeeping:true, shiftSwaps:true, staffProfiles:true, shiftTemplates:true
   });
   const navigation = { headers: { 'Sec-Fetch-Mode': 'navigate' } };
   expect((await request.get('/app/shop/settings', navigation)).headers()['content-type']).toContain('text/html');
