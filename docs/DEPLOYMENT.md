@@ -37,7 +37,7 @@ This dashboard setting cannot be applied by committing a Wrangler file. **Verify
 
 Use `main` as the production branch. In GitHub require **Build, migrations and regression tests** before merge. In Cloudflare Workers Builds disable non-production branch deployments for this Worker. Use the separate staging Worker for preview data and auth tests. Dashboard settings require account access.
 
-The production deploy script requires `npm run verify` to succeed before Wrangler uploads anything. For Cloudflare Workers Builds, provision Node 24 and a Playwright Chromium runtime with its system libraries before using `npm run deploy` as the deploy command. Confirm these prerequisites in staging before enabling automatic production deployment. Both deployment configs keep existing runtime variables and separate D1 bindings.
+GitHub Actions executes `npm run verify` (typecheck, build and Playwright tests) as the pull-request validation gate. Cloudflare Workers Builds uses `npm run build` followed by `npm run deploy` (which repeats the TypeScript/build check and uploads through Wrangler). Chromium is **not** required in Cloudflare's build environment. Configure branch protection to require the GitHub Actions check before merging; otherwise a manual merge could bypass the tests. Keep Node 24 on the production builder. Both deployment configs keep existing runtime variables and separate D1 bindings.
 
 Before any authorised production release:
 
