@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Building2, MapPinned, BriefcaseBusiness, UsersRound, CalendarDays, ArrowLeft, ArrowRight, Check, Plus } from 'lucide-react';
 import { api, write } from './api';
-import { appPath } from './routes';
+import { appPath, go, useRoute } from './routes';
 import type { Org, Location } from './Locations';
 import './BusinessSetup.css';
 
@@ -9,10 +9,8 @@ import './BusinessSetup.css';
  * Business setup workspace, deliberately separate from account registration.
  * This component reuses an existing organisation and never creates another one.
  *
- * IMPORTANT: Kept standalone until the current parallel P0-P3 implementation
- * stabilises. The host route should supply an authorised owner/admin org,
- * current D1-backed locations and employees, and onRefresh. The Positions
- * stage is deliberately gated until a persisted positions API is available.
+ * Uses an existing authorised owner/admin org and canonical D1 records.
+ * The positions stage remains clearly gated until persisted catalogue support exists.
  */
 export type SetupEmployee = { id: string; display_name: string; employment_status: string };
 export type BusinessSetupProps = {
@@ -22,7 +20,6 @@ export type BusinessSetupProps = {
   onRefresh: () => Promise<void>;
   onOrganisationChange: (next: Org) => void;
   onExit: () => void;
-  initialStep?: number;
 };
 const steps = [
   { title: 'Your business', subtitle: 'Make this workspace yours.', icon: Building2 },
@@ -32,8 +29,11 @@ const steps = [
   { title: 'Your first schedule', subtitle: 'Turn your setup into a real rota.', icon: CalendarDays }
 ] as const;
 
-export function BusinessSetup({ org, locations, employees, onRefresh, onOrganisationChange, onExit, initialStep = 1 }: BusinessSetupProps) {
-  const [step, setStep] = useState(Math.max(1, Math.min(5, initialStep)));
+export function BusinessSetup({ org, locations, employees, onRefresh, onOrganisationChange, onExit }: BusinessSetupProps) {
+  const route = useRoute();
+  const requestedStep = Number(route.searchParams.get('step') || '1');
+  const step = Number.isInteger(requestedStep) && requestedStep >= 1 && requestedStep <= 5 ? requestedStep : 1;
+  const setupPath = appPath(org.id, 'Setup');
   const [name, setName] = useState(org.name);
   const [zone, setZone] = useState(org.time_zone);
   const [weekStart, setWeekStart] = useState(org.week_start);
@@ -50,7 +50,6 @@ export function BusinessSetup({ org, locations, employees, onRefresh, onOrganisa
   const base = '/organisations/' + org.id;
   const canEdit = org.role === 'owner' || org.role === 'admin';
   const activeLocations = locations.filter(location => !location.archived_at);
-  const hasEmployees = employees.some(employee => employee.employment_status === 'active');
 
   useEffect(() => {
     let active = true;
@@ -66,7 +65,8 @@ export function BusinessSetup({ org, locations, employees, onRefresh, onOrganisa
   function navigate(next: number) {
     setError('');
     setNotice('');
-    setStep(Math.max(1, Math.min(5, next)));
+    const target = Math.max(1, Math.min(5, next));
+    go(setupPath + (target === 1 ? '' : '?step=' + target));
   }
 
   async function perform(task: () => Promise<void>, message: string, next?: number) {
@@ -76,7 +76,7 @@ export function BusinessSetup({ org, locations, employees, onRefresh, onOrganisa
     try {
       await task();
       setNotice(message);
-      if (next) setStep(next);
+      if (next) navigate(next);
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
