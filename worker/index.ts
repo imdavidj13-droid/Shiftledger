@@ -213,7 +213,11 @@ app.use('/api/v1/organisations/*',async(c,next)=>{
   // Wildcard Hono middleware does not reliably expose :orgId as a named param.
   // Parse the organisation ID from the URL and require an active membership
   // before any nested organisation route is executed.
-  const match=new URL(c.req.url).pathname.match(/^\/api\/v1\/organisations\/([^/]+)(?:\/|$)/);
+  const path=new URL(c.req.url).pathname;
+  // Collection routes (/organisations and /organisations/) have no orgId.
+  // They perform their own authentication and must not be treated as a member route.
+  if(/^\/api\/v1\/organisations\/?$/.test(path))return next();
+  const match=path.match(/^\/api\/v1\/organisations\/([^/]+)(?:\/|$)/);
   if(!match)return fail(c,'Organisation not found',404);
   const orgId=decodeURIComponent(match[1]);
   const membership=await c.env.DB.prepare("SELECT role FROM memberships WHERE organisation_id=? AND user_id=? AND status='active'").bind(orgId,u.id).first() as {role:string}|null;
