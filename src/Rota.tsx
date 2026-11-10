@@ -129,11 +129,11 @@ export function Rota(props: Props) {
       : <p className="alert error" role="alert">Only schedulers can copy or publish shifts.</p>}
   </>;
   if (shiftId && record) return <><a className="btn outline" href={href()}>Back to rota</a>
-    <ShiftDetails key={record.id + '/' + record.revision} record={record} org={org} manage={manage} endpoint={endpoint}
+    <ShiftDetails key={'details/' + record.id + '/' + record.revision} record={record} org={org} manage={manage} endpoint={endpoint}
       onChanged={async () => setRecord((await api<{ shift: Shift }>(endpoint)).shift)} onDiscard={() => go(href(), true)}
       copyHref={href('new') + '&copy=' + encodeURIComponent(record.id)} openShifts={openShifts}/>
     {manage && openShifts && record.status !== 'draft' && <ShiftClaims key={endpoint + '/' + record.revision} endpoint={endpoint} onChanged={async () => setRecord((await api<{ shift: Shift }>(endpoint)).shift)}/>}
-    {manage && record.status === 'draft' && <ShiftEditor key={record.id + '/' + record.revision}
+    {manage && record.status === 'draft' && <ShiftEditor key={'editor/' + record.id + '/' + record.revision}
       {...props} endpoint={endpoint} shift={record} onSaved={async () => setRecord((await api<{ shift: Shift }>(endpoint)).shift)}/>}</>;
 
   const shifts = [...(result?.shifts ?? [])].reverse();

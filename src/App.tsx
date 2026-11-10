@@ -6,6 +6,7 @@ import { Locations, OrganisationSettings, type Location, type Org } from './Loca
 import { formatShiftTime } from './time';
 import { Rota, type Shift } from './Rota';
 import { Leave } from './Leave';
+import { Timesheets } from './Timesheets';
 import { Profile, type User } from './Profile';
 import { Invitations, JoinInvitation } from './Invitations';
 
@@ -277,7 +278,8 @@ function Dashboard({user,org,organisations,page,resourceId,locationFilter,onLogo
  })}</div><select aria-label={'Assign location to '+e.display_name} value="" disabled={busy||!locations.length} onChange={event=>{const locationId=event.target.value;if(locationId)void action(()=>post(base+'/employee-locations',{employeeId:e.id,locationId}),'Location assigned to employee.')}}><option value="">Assign to a location…</option>{locations.filter(l=>!employeeLocations.some(x=>x.employee_id===e.id&&x.location_id===l.id)).map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></>}</div></div>)}</div>:<Empty icon={<UsersRound size={33}/>} heading="No employees yet" description="Create your first employee directory record."/>}</section>{['owner','admin'].includes(org.role)&&<section className="panel"><div className="panel-title"><h2>Add employee</h2></div><form className="form-stack pad" onSubmit={e=>{e.preventDefault();void action(()=>post(base+'/employees',{name:employeeName,locationId:locationFilter}),'Employee added'+(locationFilter?' to the selected location.':'.')).then(ok=>{if(ok)setEmployeeName('')})}}><Field label="Full name"><input required minLength={2} value={employeeName} onChange={e=>setEmployeeName(e.target.value)}/></Field><div className="form-hint">One employee record can be assigned to several branches. Use Access to invite them to sign in.</div><button disabled={busy} className="btn primary"><Plus size={17}/> Add employee</button></form></section>}</div>}
  {page==='Schedule'&&<Rota org={org} locations={locations} employees={employees} assignments={employeeLocations} locationFilter={locationFilter} resourceId={resourceId} openShifts={openShifts}/>}
  {page==='Leave'&&<Leave org={org} locations={locations} employees={employees} assignments={employeeLocations} locationFilter={locationFilter} resourceId={resourceId}/>}
- {(['Timesheets','Shift swaps','Reports'] as Page[]).includes(page)&&<section className="panel"><div className="panel-title"><h2>{page} module</h2><span>Not enabled</span></div><Empty icon={<ShieldCheck size={33}/>} heading="Not yet available" description="This module will not accept or simulate employee data until its API, permissions and approval flow are implemented."/></section>}
+ {page==='Timesheets'&&<Timesheets org={org} locations={locations} employees={employees} assignments={employeeLocations} locationFilter={locationFilter} resourceId={resourceId}/>}
+ {(['Shift swaps','Reports'] as Page[]).includes(page)&&<section className="panel"><div className="panel-title"><h2>{page} module</h2><span>Not enabled</span></div><Empty icon={<ShieldCheck size={33}/>} heading="Not yet available" description="This module will not accept or simulate employee data until its API, permissions and approval flow are implemented."/></section>}
  </>}
  <footer>© ShiftLedger · Real organisation data · No simulated statistics</footer></main></div></div>;
 }

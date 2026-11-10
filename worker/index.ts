@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { registerShifts } from './shifts';
 import { registerShiftBatch } from './shift-batch';
 import { registerLeave } from './leave';
+import { registerTimekeeping } from './timekeeping';
 import { registerInvitations } from './invitations';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 
@@ -505,6 +506,7 @@ app.post('/api/v1/organisations/:orgId/employees',async c=>{
 registerShifts(app);
 registerShiftBatch(app);
 registerLeave(app);
+registerTimekeeping(app);
 registerInvitations(app, currentUser);
 app.onError((_error,c)=>{
   console.error(JSON.stringify({event:'unexpected_api_error',requestId:c.get('requestId'),method:c.req.method}));

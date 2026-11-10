@@ -113,8 +113,9 @@ See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope an
 **P2 acceptance:** owner/manager can publish multi-branch rota; assigned staff view their shifts; conflicts and notifications behave predictably; DST and overlap tests pass.
 
 ## Priority P3 — Timekeeping, leave and coverage
-- [ ] Clock in/out, unpaid/paid breaks, corrections, missed punches, approval chain and edit reasons; audit events for all pay-relevant changes.
-- [ ] Timesheet weekly/pay-period approval, lock/reopen, manager access scoped to branches, employee own time, rounding options, payroll cutoffs and export reproducibility.
+- [x] Staff API for clock in/out and paid/unpaid breaks. Management forms for missing punches, break-end corrections, reasons and individual approval with audit history. Verified locally.
+- [x] Branch-scoped timesheet list with date-range and status filters, individual approval locks and scheduled versus actual hours on linked shifts. Staff API reads are limited to their own time entries.
+- [ ] Activate production timesheets with migration 0008. Add saved pay periods, period-wide approvals, a controlled reopen workflow, rounding, payroll cutoffs and reproducible exports.
 - [x] Management leave list, request entry, review, approval, decline and cancellation. Staff API for their own requests, and branch time zone and shift conflict checks. Verified locally.
 - [ ] Activate leave with production migration 0007. Finish availability and exceptions, configurable leave types, balances/accrual and holiday calendars.
 - [ ] Shift swaps, offers, eligibility, staff requests and approvals; cross-branch eligibility and permission enforcement.
