@@ -41,3 +41,12 @@
 .workspace-choice span{font-size:12px;color:#315b43;margin-top:5px;overflow-wrap:anywhere}
 .org-picker{background:#fff;color:#075641;border:2px solid #c9f05e;margin-bottom:20px;font-size:12px;font-weight:700}
 @media(max-width:750px){.onboard-description{font-size:13px}.onboard-actions{flex-wrap:wrap}.onboard-actions .btn{flex:1}}
+
+/* Canonical route links retain the established fully opaque theme. */
+.sidebar nav .nav-item{text-decoration:none}
+.sidebar nav .nav-item:visited{color:#fff}
+.sidebar nav .nav-item.selected:visited{color:#075641}
+.location-directory{margin-top:18px}
+.employee-row{flex:1;min-width:0}
+.employee-row select{margin-top:10px;max-width:340px;font-size:12px;min-height:38px;padding:8px;background:#fff}
+.employee-row small{line-height:1.5}
