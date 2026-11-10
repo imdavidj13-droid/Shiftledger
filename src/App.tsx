@@ -23,7 +23,10 @@ function pathOrganisation():string|null {
 }
 function pageForPath(organisationId:string):Page {
  const match=window.location.pathname.match(/^\/app\/([^/]+)\/([^/]+)\/?$/);
- if(!match||decodeURIComponent(match[1])!==organisationId)return 'Overview';
+ if(!match)return 'Overview';
+ let parsed:string;
+ try{parsed=decodeURIComponent(match[1]);}catch{return 'Overview';}
+ if(parsed!==organisationId)return 'Overview';
  return (Object.keys(PAGE_SLUGS) as Page[]).find(p=>PAGE_SLUGS[p]===match[2])||'Overview';
 }
 
@@ -246,6 +249,14 @@ function App(){
  const [user,setUser]=useState<User|null>(null),[orgs,setOrgs]=useState<Org[]>([]),[org,setOrg]=useState<Org|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
  async function refresh(){try{const x=await api<{user:User}>('/auth/me');setUser(x.user);const y=await api<{organisations:Org[]}>('/organisations');setOrgs(y.organisations);setOrg(current=>y.organisations.find(o=>o.id===pathOrganisation())||y.organisations.find(o=>o.id===current?.id)||y.organisations[0]||null);setError('')}catch(e){setUser(null);setOrgs([]);setOrg(null);const msg=(e as Error).message;if(msg!=='Sign in required')setError(msg)}finally{setLoading(false)}}
  useEffect(()=>{void refresh()},[]);
+ useEffect(()=>{
+  const syncOrganisation=()=>{
+   const selected=pathOrganisation();
+   if(selected)setOrg(current=>orgs.find(o=>o.id===selected)||current);
+  };
+  window.addEventListener('popstate',syncOrganisation);
+  return()=>window.removeEventListener('popstate',syncOrganisation);
+ },[orgs]);
  async function logout(){try{await post('/auth/logout',{})}finally{setUser(null);setOrg(null);setOrgs([])}}
  if(verificationToken)return <VerificationPage token={verificationToken}/>;
  if(window.location.pathname==='/preview/email-verified')return <VerificationPreview failed={false}/>;
