@@ -20,6 +20,19 @@ Updated 10 November 2026. This is the primary implementation backlog for ChatGPT
 - Employee profiles, employment state, department/position, staff import (if scoped), shared staff identity across locations and assignment rules function end-to-end.
 - Every action is reflected in D1 after reload and correctly scoped for owner/admin/manager/employee; all detail screens have durable URLs.
 
+### Schedule screen — explicit owner UX requirements (current P2 scope)
+- **Weekly / Monthly** view control must be visible in the Schedule page header. The selected view belongs in the canonical URL (for example `?view=month&month=2026-11` or a stable existing week query); changing views must work with reload, bookmarking, browser back/forward, and branch filtering.
+- The **monthly rota** is a genuine month calendar, not merely seven wider day cards. Every date cell displays concise real shifts, open shift counts and clear overflow where needed. Clicking a day drills into its full day schedule, and clicking an individual shift opens its details. Previous/next month, today, accessible keyboard controls and small-screen layout must work.
+- Support **open shifts** as first-class vacancies. Managers can create an unassigned shift, explicitly mark it open, publish it, display it distinctly in week/month/day views, and review employee claims or offers under configured approval policy. Do not confuse unpublished draft/unassigned records with published open shifts.
+- Only an eligible employee (active, assigned/authorised to the location, appropriate role/skills when applicable, available, and without overlaps or approved leave conflicts) can claim an open shift. Enforce eligibility and concurrency atomically in the API; prevent two employees claiming the same capacity, create an audit event, and notify relevant parties. Claims require manager approval unless the organisation explicitly enables auto-approval.
+- These are current **business-side** scheduling features. Build owner/manager creation and approval UIs now; employee self-service APIs and access checks can be added as needed for correctness, but the separately designed worker-facing product experience comes **later**, after business-side P0–P3 is complete.
+
+### Employee-facing experience — future separate product UX milestone
+- **Do not implement the dedicated worker-side interface yet.** First finish and verify the complete business/manager P0–P3 flows.
+- After that, design and build a **separate role-appropriate employee experience** (web-first and mobile-friendly, dedicated mobile apps later) on the same authenticated backend and organisation/location/employee identities. Do not create a duplicate database or duplicate employee identity.
+- Future worker-facing core journeys: own schedule and calendar, open shifts and claims, availability, clock-in/out and breaks, own timesheets and correction requests, holiday/absence requests and balances, swap offers/requests, notifications, profile, accessible onboarding and account recovery.
+- Employees must never see owner/admin settings, confidential staff data or manager reports. API permissions should be designed and tested now so the future frontend is safe and does not require rebuilding the data model.
+
 ### P2 exit gate (all required)
 - Week/day/month rota views; create/edit/duplicate/delete draft shifts; shift templates, copy-week, multi-shift operations and recurring patterns.
 - Publish/revise/cancel individual and bulk schedules with versioned audit trail, employee visibility and idempotent notification delivery or accurately documented blocked provider-dependent delivery.
@@ -141,8 +154,8 @@ See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope an
 
 ## Work execution protocol for ChatGPT Work
 1. Read source code and docs; reconcile roadmap with reality. Start with P0 and verify no failed builds remain.
-2. Use a working branch or isolated Work environment; maintain green CI. Commit in tested, coherent batches, not one commit per small unchecked change.
-3. Implement as much of P1 -> P2 -> P3 -> P4 as reasonably possible, prioritising usable vertical slices rather than mocked screens. Advance only after prior gates pass.
+2. Work directly on `main` as instructed by the owner (no branches or pull requests). Maintain green CI; validate changes before every commit, in cohesive batches.
+3. Finish and verify P0–P3, prioritising usable business-side vertical slices, including weekly/monthly calendar and open shifts. Do not proceed to P4–P6 or the separate employee-facing UX yet.
 4. When blocked by missing secrets, approvals, or unavailable provider accounts, implement safe abstraction/tests and mark the step blocked. Do not fabricate successful integrations.
 5. Update this roadmap and `docs/IMPLEMENTATION_STATUS.md` as results become test-verified; report commands, tests, commits/PRs, migration status and known risks.
 6. Never stop at planning-only output if coding is possible; use available computer, repo and connected capabilities for meaningful implementation.
