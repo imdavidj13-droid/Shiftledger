@@ -184,7 +184,7 @@ function Onboard({refresh}:{refresh:()=>void}){
   <div className="overline">BUILD YOUR BUSINESS WORKSPACE</div>
   <h1>{step===1?'Tell us about your organisation.':step===2?'Set your scheduling preferences.':'Choose how to begin.'}</h1>
   <p className="onboard-description">{step===1?'One organisation can contain multiple sites, branches and teams.':step===2?'We’ll use these defaults across the organisation. Individual locations can have their own time zones.':'Create your organisation and optionally set up its first location. You can add more branches later.'}</p>
-  <div className="onboard-progress" aria-label={'Onboarding step '+step+' of 3}>{[1,2,3].map(n => <span key={n} className={step >= n ? 'active' : ''} />)}</div>
+  <div className="onboard-progress" aria-label={'Onboarding step '+step+' of 3'}>{[1,2,3].map(n => <span key={n} className={step >= n ? 'active' : ''} />)}</div>
   <section className="form-panel"><div className="section-title"><Building2 size={24}/><div><h2>{step===1?'Business details':step===2?'How your business operates':'Your first workspace'}</h2><p>{step===1?'Start with the essentials.':step===2?'These settings can be updated later.':'All locations belong to this same organisation account.'}</p></div></div>
    {error&&<Alert message={error}/>}
    {step===1&&<form className="form-stack" onSubmit={goNext}>
