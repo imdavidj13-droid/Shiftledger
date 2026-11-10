@@ -1,5 +1,9 @@
 # ShiftLedger — ChatGPT Work execution handoff
 
+## NEW LOCKED REQUIREMENT — ORIGINAL FIVE-STEP BUSINESS SETUP
+
+The business-owner onboarding must be a distinct **full-page five-step ShiftLedger experience**, NOT a copy of RotaCloud screenshots or modal UI. Required stages: 1. Your business; 2. Your workplaces; 3. How your team works (job positions distinct from permission roles); 4. Bring your team together (add staff, assign roles/locations, invite optionally); 5. Your first schedule (build real draft rota and publish deliberately). Preserve the existing organisation and prefilled registration settings, allow resume/defer, route-safe navigation, real D1 persistence and no duplicate organisations. Use opaque forest-green/lime/ivory with original design and copy. The full acceptance criteria are locked in `docs/FEATURE_BACKLOG.md`. This is P1/P2 business-side work; dedicated worker-facing UI remains deferred.
+
 ## LATEST SCHEDULING AND PLATFORM-SCOPE INSTRUCTIONS
 
 **Business-side development is the current project.** Do not build the standalone employee/worker-facing UI in this development batch. Design secure staff-facing API permissions in P0–P3, but after the business-side phases are 100% complete, plan and build the separate employee experience on the same backend and shared employee identities. The worker-facing web/mobile journeys will later include personal schedule, open shift claims, availability, time clock, timesheets, leave, swaps, notifications and profile.
