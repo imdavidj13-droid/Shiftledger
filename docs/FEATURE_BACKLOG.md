@@ -105,7 +105,7 @@ See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope an
 - [ ] Review state, updates to published shifts, bulk publishing and idempotent staff notifications.
 - [ ] Conflict engine: overlapping shifts across locations, unavailability, approved leave, breaks, min/max hours, overtime warning, optional rest requirements, working-time rules as *configurable warnings* until jurisdiction-reviewed.
 - [x] Implement and locally test explicitly marked open shifts, one pending claim per vacancy and branch-scoped approval or decline.
-- [ ] Enable open shifts in production after approval of migration 0006. Finish eligibility rules for availability/leave/positions, claim notifications and configurable auto-approval.
+- [ ] Enable open shifts in production after approval of migration 0006. Finish eligibility rules for availability and positions, claim notifications and configurable auto-approval.
 - [ ] User notifications centre: in-app and email templates, opt-in preferences, queued/retried/idempotent messages, digest modes, delivery/bounce diagnostics and quota observability.
 - [ ] Employee personal schedule, calendar export (ICS), print/share/export and clear shift details. Avoid fake scheduling metrics.
 
@@ -114,7 +114,8 @@ See [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) for the tested scope an
 ## Priority P3 — Timekeeping, leave and coverage
 - [ ] Clock in/out, unpaid/paid breaks, corrections, missed punches, approval chain and edit reasons; audit events for all pay-relevant changes.
 - [ ] Timesheet weekly/pay-period approval, lock/reopen, manager access scoped to branches, employee own time, rounding options, payroll cutoffs and export reproducibility.
-- [ ] Availability, recurring patterns and exceptions; leave types (holiday, sick, unpaid, other), requests/approval, balances/accrual where verified for each country, holiday calendars.
+- [x] Management leave list, request entry, review, approval, decline and cancellation. Staff API for their own requests, and branch time zone and shift conflict checks. Verified locally.
+- [ ] Activate leave with production migration 0007. Finish availability and exceptions, configurable leave types, balances/accrual and holiday calendars.
 - [ ] Shift swaps, offers, eligibility, staff requests and approvals; cross-branch eligibility and permission enforcement.
 - [ ] Absence alerts and staffing gaps with appropriate privacy boundaries.
 

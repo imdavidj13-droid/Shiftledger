@@ -1,6 +1,6 @@
 import type { Hono } from 'hono';
 import { audit, body, fail, isoNow, orgAdmin, orgRoute, safeStr, type ApiContext, type Env } from './http';
-import { activeLocation, canManage, locationPermission, noOverlap, schemaHasTable, staffEligible, utc } from './workforce';
+import { activeEmployeeMember, activeLocation, canManage, locationPermission, noApprovedLeave, noOverlap, schemaHasTable, staffEligible, utc } from './workforce';
 
 const path = orgRoute + '/shifts';
 const selectShift = (openShifts: boolean) => `SELECT s.id,s.location_id,s.employee_id,s.starts_at_utc,s.ends_at_utc,
@@ -37,8 +37,9 @@ async function findShift(c: ApiContext, id: string, openShifts: boolean) {
 }
 
 const openShiftSchema = (c: ApiContext) => schemaHasTable(c.env.DB, 'shift_claims');
-const writeGuard = `${activeLocation('?2','?3')} AND ${locationPermission('?2','?3','?8')}
-  AND (?4 IS NULL OR (${staffEligible('?2','?3','?4')} AND ${noOverlap('?2','?1','?4','?5','?6')}))`;
+const writeGuard = (leaveEnabled: boolean) => `${activeLocation('?2','?3')} AND ${locationPermission('?2','?3','?8')}
+  AND (?4 IS NULL OR (${staffEligible('?2','?3','?4')} AND ${noOverlap('?2','?1','?4','?5','?6')}
+    ${leaveEnabled ? 'AND ' + noApprovedLeave('?2','?4','?5','?6') : ''}))`;
 
 async function saveDraft(c: ApiContext, openShifts: boolean, previous?: Shift) {
   const input = await body(c);
@@ -63,32 +64,29 @@ async function saveDraft(c: ApiContext, openShifts: boolean, previous?: Shift) {
   if (employee && !await db.prepare('SELECT 1 WHERE ' + staffEligible('?','?','?')).bind(org,location,employee).first()) {
     return fail(c,'Assign an active employee to the selected location before scheduling them',422);
   }
+  const guard = writeGuard(Boolean(employee) && await schemaHasTable(db,'leave_requests'));
   const values = [id,org,location,employee,start,end,breaks,user];
   const change = previous
     ? db.prepare(`UPDATE shifts SET location_id=?3,employee_id=?4,starts_at_utc=?5,ends_at_utc=?6,
         unpaid_break_minutes=?7,updated_at=?10,revision=revision+1${openShifts ? ',is_open=?11' : ''}
-        WHERE id=?1 AND organisation_id=?2 AND revision=?9 AND status='draft' AND ${writeGuard}
+        WHERE id=?1 AND organisation_id=?2 AND revision=?9 AND status='draft' AND ${guard}
         AND ${locationPermission('?2','shifts.location_id','?8')}`).bind(...values,version,isoNow(),...(openShifts ? [Number(open)] : []))
     : db.prepare(`INSERT INTO shifts(id,organisation_id,location_id,employee_id,starts_at_utc,ends_at_utc,unpaid_break_minutes${openShifts ? ',is_open' : ''})
-        SELECT ?1,?2,?3,?4,?5,?6,?7${openShifts ? ',?9' : ''} WHERE ${writeGuard}`)
+        SELECT ?1,?2,?3,?4,?5,?6,?7${openShifts ? ',?9' : ''} WHERE ${guard}`)
         .bind(...values,...(openShifts ? [Number(open)] : []));
   const results = await db.batch([change,audit(c,previous?'update':'create','shift',id,{
     revision: previous ? previous.revision + 1 : 1, locationId: location, employeeId: employee, startsAt: start, endsAt: end, breakMinutes: breaks, isOpen: open
   },true)]);
-  if (!results[0].meta.changes) return fail(c,'The employee has an overlapping shift or the shift, location or assignment has changed.',409);
+  if (!results[0].meta.changes) return fail(c,'The employee has an overlapping shift or approved leave, or the shift, location or assignment has changed.',409);
   return c.json({shift:{id,status:'draft',revision:previous?previous.revision+1:1}},previous?200:201);
 }
 
-function claimEligible(shift: string, employee: string, now: string) {
+function claimEligible(shift: string, employee: string, now: string, leaveEnabled: boolean) {
   return `${shift}.status='published' AND ${shift}.is_open=1 AND ${shift}.starts_at_utc>${now}
     AND ${activeLocation(shift + '.organisation_id',shift + '.location_id')}
     AND ${staffEligible(shift + '.organisation_id',shift + '.location_id',employee)}
-    AND ${noOverlap(shift + '.organisation_id',shift + '.id',employee,shift + '.starts_at_utc',shift + '.ends_at_utc')}`;
-}
-
-function activeEmployeeMember(org: string, user: string) {
-  return `EXISTS (SELECT 1 FROM memberships m WHERE m.organisation_id=${org} AND m.user_id=${user}
-    AND m.role='employee' AND m.status='active')`;
+    AND ${noOverlap(shift + '.organisation_id',shift + '.id',employee,shift + '.starts_at_utc',shift + '.ends_at_utc')}
+    ${leaveEnabled ? 'AND ' + noApprovedLeave(shift + '.organisation_id',employee,shift + '.starts_at_utc',shift + '.ends_at_utc') : ''}`;
 }
 
 function registerClaims(app: Hono<Env>) {
@@ -113,11 +111,12 @@ function registerClaims(app: Hono<Env>) {
     const shift = await findShift(c,shiftId,true);
     if (!shift?.is_open) return fail(c,'Open shift not found',404);
     const db = c.env.DB, id = crypto.randomUUID(), now = isoNow();
+    const leaveEnabled = await schemaHasTable(db,'leave_requests');
     const results = await db.batch([
       db.prepare(`INSERT INTO shift_claims(organisation_id,id,shift_id,employee_id,requested_at)
         SELECT ?1,?2,s.id,e.id,?5 FROM shifts s JOIN employees e ON e.organisation_id=s.organisation_id
         WHERE s.organisation_id=?1 AND s.id=?3 AND e.user_id=?4 AND ${activeEmployeeMember('?1','?4')}
-        AND ${claimEligible('s','e.id','?5')} ON CONFLICT DO NOTHING`).bind(org,id,shiftId,user,now),
+        AND ${claimEligible('s','e.id','?5',leaveEnabled)} ON CONFLICT DO NOTHING`).bind(org,id,shiftId,user,now),
       audit(c,'request','shift_claim',id,{shiftId},true)
     ]);
     if (!results[0].meta.changes) return fail(c,'This vacancy already has a claim or is no longer available to you.',409);
@@ -132,10 +131,11 @@ function registerClaims(app: Hono<Env>) {
     if (!shift) return fail(c,'Shift not found',404);
     const action = c.req.param('action') || '', approve = action === 'approve';
     const org = c.get('organisationId'), user = c.get('userId'), now = isoNow(), db = c.env.DB;
+    const leaveEnabled = approve && await schemaHasTable(db,'leave_requests');
     const candidate = `SELECT cl.employee_id FROM shift_claims cl JOIN employees e
       ON e.organisation_id=cl.organisation_id AND e.id=cl.employee_id
       WHERE cl.organisation_id=?1 AND cl.shift_id=?2 AND cl.id=?3 AND cl.status='pending'
-      AND ${activeEmployeeMember('?1','e.user_id')} AND ${claimEligible('shifts','cl.employee_id','?5')}`;
+      AND ${activeEmployeeMember('?1','e.user_id')} AND ${claimEligible('shifts','cl.employee_id','?5',leaveEnabled)}`;
     const approveShift = db.prepare(`UPDATE shifts SET employee_id=(${candidate}),is_open=0,revision=revision+1,updated_at=?5
       WHERE organisation_id=?1 AND id=?2 AND ${locationPermission('?1','shifts.location_id','?4')}
       AND EXISTS (${candidate})`).bind(org,shiftId,id,user,now);
@@ -204,12 +204,14 @@ export function registerShifts(app: Hono<Env>) {
     const where = `organisation_id=?1 AND id=?2 AND revision=?3 AND status=?4
       AND ${locationPermission('?1','shifts.location_id','?5')}`;
     const db = c.env.DB;
+    const leaveEnabled = action === 'publish' && Boolean(shift.employee_id) && await schemaHasTable(db,'leave_requests');
     const change = action === 'discard'
       ? db.prepare('DELETE FROM shifts WHERE ' + where).bind(org,id,revision,expected,user)
       : db.prepare(`UPDATE shifts SET status=?6,updated_at=?7,revision=revision+1 WHERE ${where}
         ${action === 'publish' ? `AND ${activeLocation('?1','shifts.location_id')}
           AND (${openShifts ? 'is_open=1' : 'employee_id IS NULL'} OR (${staffEligible('?1','shifts.location_id','shifts.employee_id')}
-          AND ${noOverlap('?1','shifts.id','shifts.employee_id','shifts.starts_at_utc','shifts.ends_at_utc')}))` : ''}`)
+          AND ${noOverlap('?1','shifts.id','shifts.employee_id','shifts.starts_at_utc','shifts.ends_at_utc')}
+          ${leaveEnabled ? 'AND ' + noApprovedLeave('?1','shifts.employee_id','shifts.starts_at_utc','shifts.ends_at_utc') : ''}))` : ''}`)
         .bind(org,id,revision,expected,user,next,isoNow());
     const writes = [change,audit(c,action,'shift',id,{
       revision:revision+1,locationId:shift.location_id,employeeId:shift.employee_id,startsAt:shift.starts_at_utc,endsAt:shift.ends_at_utc

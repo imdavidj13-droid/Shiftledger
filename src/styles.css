@@ -138,3 +138,7 @@ a:focus-visible{outline:3px solid #10261f;outline-offset:3px}
 }
 .rota-shift.rota-vacancy{background:#ffe1a8;border-left-color:#89640c}
 .rota-checkbox{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--dark)}
+.workforce-record{display:flex;justify-content:space-between;align-items:center;gap:12px;color:var(--dark);text-decoration:none;border:1px solid var(--border);border-radius:6px}
+.workforce-record:hover{background:var(--tint)}
+.workforce-note{white-space:pre-wrap;overflow-wrap:anywhere}
+.field textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--dark);font:inherit;resize:vertical}

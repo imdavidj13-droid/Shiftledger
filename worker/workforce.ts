@@ -8,8 +8,9 @@ export const locationPermission = (org: string, location: string, user: string) 
     (SELECT 1 FROM location_access a WHERE a.organisation_id=${org} AND a.location_id=${location} AND a.user_id=${user}))))`;
 
 export const staffEligible = (org: string, location: string, employee: string) => `EXISTS (
-  SELECT 1 FROM employee_locations el JOIN employees e ON e.organisation_id=el.organisation_id AND e.id=el.employee_id
-  WHERE el.organisation_id=${org} AND el.location_id=${location} AND el.employee_id=${employee} AND e.employment_status='active')`;
+  SELECT 1 FROM employee_locations el JOIN employees eligible_employee
+    ON eligible_employee.organisation_id=el.organisation_id AND eligible_employee.id=el.employee_id
+  WHERE el.organisation_id=${org} AND el.location_id=${location} AND el.employee_id=${employee} AND eligible_employee.employment_status='active')`;
 
 export const activeLocation = (org: string, location: string) => `EXISTS (
   SELECT 1 FROM locations WHERE organisation_id=${org} AND id=${location} AND archived_at IS NULL)`;
@@ -30,3 +31,11 @@ export function utc(value: unknown) {
 export async function schemaHasTable(db: D1Database, name: string) {
   return Boolean(await db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").bind(name).first());
 }
+
+export const activeEmployeeMember = (org: string, user: string) => `EXISTS (
+  SELECT 1 FROM memberships m WHERE m.organisation_id=${org} AND m.user_id=${user}
+  AND m.role='employee' AND m.status='active')`;
+
+export const noApprovedLeave = (org: string, employee: string, start: string, end: string) => `NOT EXISTS (
+  SELECT 1 FROM leave_requests lr WHERE lr.organisation_id=${org} AND lr.employee_id=${employee}
+    AND lr.status='approved' AND lr.starts_at_utc<${end} AND lr.ends_at_utc>${start})`;
