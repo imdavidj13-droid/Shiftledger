@@ -17,7 +17,7 @@ async function derivePassword(password: string,salt: string) {
 }
 function validZone(s: string) { try { new Intl.DateTimeFormat('en-US',{timeZone:s});return true; }catch{return false;} }
 function passValid(s: string) {return s.length>=12&&s.length<=128;}
-function isEmail(s: string) {return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(s)&&s.length<=254;}
+function isEmail(s: string) {return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)&&s.length<=254;}
 async function body(c: any) { try {const b=await c.req.json(); return b&&typeof b==='object'&&!Array.isArray(b)?b:null;}catch{return null;} }
 function fail(c: any, text: string, status: 400|401|403|404|409|422|429|500|503=400) {return c.json(jsonError(text,status),status);}
 function safeStr(v: unknown,limit=120){return typeof v==='string'?v.trim().slice(0,limit):'';}
@@ -69,8 +69,8 @@ app.post('/api/v1/auth/register',async c=>{
   const id=crypto.randomUUID(),salt=rnd(16),hash=await derivePassword(password,salt);
   await c.env.DB.prepare('INSERT INTO users(id,email_normalized,display_name,password_hash,password_salt) VALUES(?,?,?,?,?)').bind(id,email,name,hash,salt).run();
   const token=await tokenFor(c,id,'verify_email');
-  const link=c.env.APP_URL.replace(/\\/$/,'')+'/?verify='+encodeURIComponent(token);
-  const sent=await sendMail(c,email,'Verify your ShiftLedger email','Verify your account by visiting: '+link+'\\nThis link expires in 24 hours.');
+  const link=c.env.APP_URL.replace(/\/$/,'')+'/?verify='+encodeURIComponent(token);
+  const sent=await sendMail(c,email,'Verify your ShiftLedger email','Verify your account by visiting: '+link+'\nThis link expires in 24 hours.');
   if(!sent)return fail(c,'Account created, but email delivery failed. Contact support or retry verification.',503);
   return c.json({ok:true,message:'Check your email for a verification link.'},201);
 });
@@ -113,7 +113,7 @@ app.post('/api/v1/auth/forgot-password',async c=>{
   const row=await c.env.DB.prepare('SELECT id FROM users WHERE email_normalized=?').bind(email).first() as {id:string}|null;
   if(row&&c.env.APP_URL&&c.env.RESEND_API_KEY&&c.env.MAIL_FROM){
     const token=await tokenFor(c,row.id,'reset_password');
-    await sendMail(c,email,'Reset your ShiftLedger password','Reset your password: '+c.env.APP_URL.replace(/\\/$/,'')+'/?reset='+token);
+    await sendMail(c,email,'Reset your ShiftLedger password','Reset your password: '+c.env.APP_URL.replace(/\/$/,'')+'/?reset='+token);
   }
   return c.json({ok:true,message:'If this email is registered, reset instructions will be sent.'});
 });
@@ -201,7 +201,7 @@ app.post('/api/v1/organisations/:orgId/shifts',async c=>{
   if(!['owner','admin','manager'].includes(c.get('role')))return fail(c,'Not permitted',403);
   const x=await body(c),location=safeStr(x?.locationId,64),employee=x?.employeeId? safeStr(x.employeeId,64):null;
   const start=safeStr(x?.startsAt,40),end=safeStr(x?.endsAt,40),breaks=x?.breakMinutes??0;
-  if(!location||!/^\\d{4}-\\d{2}-\\d{2}T/.test(start)||!start.endsWith('Z')||!end.endsWith('Z')||!Number.isFinite(Date.parse(start))||!Number.isFinite(Date.parse(end))||Date.parse(end)<=Date.parse(start)||!Number.isInteger(breaks)||breaks<0||breaks>1440)return fail(c,'Valid location, UTC start/end and break minutes required',422);
+  if(!location||!/^\d{4}-\d{2}-\d{2}T/.test(start)||!start.endsWith('Z')||!end.endsWith('Z')||!Number.isFinite(Date.parse(start))||!Number.isFinite(Date.parse(end))||Date.parse(end)<=Date.parse(start)||!Number.isInteger(breaks)||breaks<0||breaks>1440)return fail(c,'Valid location, UTC start/end and break minutes required',422);
   const id=crypto.randomUUID(),org=c.get('organisationId');
   const loc=await c.env.DB.prepare('SELECT id FROM locations WHERE organisation_id=? AND id=? AND archived_at IS NULL').bind(org,location).first();
   if(!loc)return fail(c,'Location not found',404);
