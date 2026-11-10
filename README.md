@@ -45,3 +45,7 @@ npm run db:migrate:remote
 ```
 
 The initial dashboard remains a preview. Authentication, workforce CRUD, and permissions are not operational yet.
+
+### Cloudflare build troubleshooting
+
+If saving Workers Builds settings does not start a new run, push a commit to the configured production branch (`main`). The deploy command `npm run deploy` builds the frontend before calling Wrangler, preventing the `assets.directory` missing `dist` error. Confirm new logs include `npm run deploy` and Vite output.
