@@ -23,6 +23,16 @@ For interactive work, run `npm run db:migrate:local`, build once, then run `npm 
 4. Configure staging-only `APP_URL`, sender and test-recipient settings through Cloudflare when testing delivery. Keep production secrets out of the staging Worker.
 5. Smoke-test staging `/api/v1/health`, `/api/v1/ready`, a signed-out workspace deep link, a verified fixture owner, multiple locations, invitations, and the restricted manager and employee roles.
 
+## No Cloudflare preview builds (current project policy)
+
+Cloudflare preview builds are controlled in the **Cloudflare dashboard**, not by `preview_urls: false` and not by GitHub Actions configuration. For this project, the owner chose **no separate staging Worker or staging D1**. Do not configure `wrangler.previews` using the production D1 binding.
+
+In Cloudflare: **Workers & Pages → shiftledger → Settings → Builds → Branch control → uncheck Enable Preview Builds → Save**. Keep the production branch set to `main`. GitHub Actions PR checks still run independently, using local ephemeral test databases, and should be green before merge.
+
+The earlier PR build errors (missing `previews` block) came from Cloudflare trying to run `wrangler preview` on a non-production branch; turning off preview builds stops that workflow. `preview_urls: false` merely disables version URLs and does not disable PR preview builds.
+
+This dashboard setting cannot be applied by committing a Wrangler file. **Verify the checkbox has been disabled before merging**. Without a staging environment, do all development checks locally and in CI and make a recorded production D1 backup before authorised migrations. Never give a preview access to production secrets or D1. A merge to `main` may automatically deploy the Worker; inspect and rehearse outstanding additive migrations and check the production build command/runtime first.
+
 ## Production release gate
 
 Use `main` as the production branch. In GitHub require **Build, migrations and regression tests** before merge. In Cloudflare Workers Builds disable non-production branch deployments for this Worker. Use the separate staging Worker for preview data and auth tests. Dashboard settings require account access.
