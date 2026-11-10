@@ -1,45 +1,94 @@
-import { useState } from 'react';
-import { LayoutDashboard, CalendarDays, UsersRound, Clock3, CalendarCheck2, ArrowLeftRight, BarChart3, Settings2, Plus, Search, Bell, ChevronDown, ArrowUpRight, ShieldCheck } from 'lucide-react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { LayoutDashboard, CalendarDays, UsersRound, Clock3, CalendarCheck2, ArrowLeftRight, BarChart3, Settings2, Plus, LogOut, Building2, MapPin, ShieldCheck, ArrowRight, CheckCircle2, AlertCircle, RefreshCcw } from 'lucide-react';
 
-const navigation = [
-  { name: 'Overview', icon: LayoutDashboard },
-  { name: 'Schedule', icon: CalendarDays },
-  { name: 'Team', icon: UsersRound },
-  { name: 'Timesheets', icon: Clock3 },
-  { name: 'Leave', icon: CalendarCheck2 },
-  { name: 'Shift swaps', icon: ArrowLeftRight },
-  { name: 'Reports', icon: BarChart3 },
-  { name: 'Settings', icon: Settings2 },
+type User = {id:string;name:string;email:string};
+type Org = {id:string;name:string;slug:string;country_code:string;currency_code:string;time_zone:string;role:string};
+type Location = {id:string;name:string;time_zone:string};
+type Employee = {id:string;display_name:string;employment_status:string};
+type Shift = {id:string;location_id:string;employee_id:string|null;starts_at_utc:string;ends_at_utc:string;status:string};
+type AuthMode='login'|'register'|'forgot'|'reset';
+type Page='Overview'|'Schedule'|'Team'|'Timesheets'|'Leave'|'Shift swaps'|'Reports'|'Settings';
+const nav: {name:Page;icon:typeof LayoutDashboard}[]=[
+ {name:'Overview',icon:LayoutDashboard},{name:'Schedule',icon:CalendarDays},{name:'Team',icon:UsersRound},{name:'Timesheets',icon:Clock3},{name:'Leave',icon:CalendarCheck2},{name:'Shift swaps',icon:ArrowLeftRight},{name:'Reports',icon:BarChart3},{name:'Settings',icon:Settings2}
 ];
-
-const stats = [
-  { label: 'Scheduled shifts', value: '—', detail: 'Connect an organisation to see schedules' },
-  { label: 'Team members', value: '—', detail: 'No organisation configured' },
-  { label: 'Hours this week', value: '—', detail: 'Time tracking not configured' },
-  { label: 'Pending requests', value: '—', detail: 'Approvals not configured' },
-];
-
-function App() {
-  const [active, setActive] = useState('Overview');
-  const [search, setSearch] = useState('');
-  return <div className="app">
-    <aside className="sidebar">
-      <div className="brand"><div className="brand-mark"><CalendarCheck2 size={23}/></div><span>Shift<span className="brand-accent">Ledger</span></span></div>
-      <div className="workspace"><div className="workspace-icon">S</div><div className="workspace-copy"><strong>My workspace</strong><small>Setup required</small></div><ChevronDown size={16}/></div>
-      <div className="nav-label">WORKSPACE</div>
-      <nav>{navigation.map(({name,icon: Icon}) => <button className={active===name?'nav-item selected':'nav-item'} key={name} onClick={()=>setActive(name)}><Icon size={19}/><span>{name}</span></button>)}</nav>
-      <div className="sidebar-footer"><div className="help-box"><ShieldCheck size={20}/><strong>Built for teams</strong><p>Keep schedules, people and hours in one secure workspace.</p></div><div className="account"><div className="avatar">SL</div><div><strong>Workspace preview</strong><small>Not signed in</small></div></div></div>
-    </aside>
-    <main className="main">
-      <header className="topbar"><div className="breadcrumb">Workspace <span>/</span> <strong>{active}</strong></div><div className="top-actions"><div className="search"><Search size={17}/><input aria-label="Search" placeholder="Search workspace" value={search} onChange={e=>setSearch(e.target.value)}/></div><button className="icon-button" aria-label="Notifications" title="Notifications will be available after setup"><Bell size={19}/></button><div className="header-avatar">SL</div></div></header>
-      <div className="page">
-        <div className="eyebrow">SHIFTLEDGER / WORKSPACE</div>
-        <div className="heading"><div><h1>{active==='Overview'?'Good morning.':active}</h1><p>{active==='Overview'?'Everything your team needs, in one place.':'This module will become available as we implement the backend.'}</p></div><button className="primary-button" disabled title="Available after organisation setup"><Plus size={18}/> Create shift</button></div>
-        <div className="notice"><span className="notice-dot"/><div><strong>Early development preview</strong><p>This is the real application shell, but live workforce data and authentication are not connected. No statistics are fabricated.</p></div></div>
-        {active==='Overview'? <><div className="stat-grid">{stats.map(s=><section className="stat-card" key={s.label}><div className="stat-heading">{s.label}<ArrowUpRight size={16}/></div><div className="stat-value">{s.value}</div><p>{s.detail}</p></section>)}</div><div className="content-grid"><section className="panel"><div className="panel-heading"><div><h2>Upcoming shifts</h2><p>Your team's upcoming schedule will appear here.</p></div><span className="quiet-tag">This week</span></div><div className="empty"><CalendarDays size={31}/><h3>No shifts yet</h3><p>Create an organisation and add staff before publishing your first rota.</p></div></section><section className="panel"><div className="panel-heading"><div><h2>Getting started</h2><p>Set up ShiftLedger in the right order.</p></div></div><ol className="steps"><li><span>1</span><div><strong>Create your organisation</strong><p>Choose a name, time zone and country.</p></div></li><li><span>2</span><div><strong>Add locations and team members</strong><p>Invite managers and employees.</p></div></li><li><span>3</span><div><strong>Publish your first schedule</strong><p>Assign shifts and notify your team.</p></div></li></ol></section></div></> : <section className="panel module-placeholder"><div className="empty"><Settings2 size={31}/><h3>{active} is on the roadmap</h3><p>We're building authenticated organisation setup first so this module uses real, isolated data.</p></div></section>}
-        <footer className="footer">ShiftLedger · Foundation release · Preview only</footer>
-      </div>
-    </main>
-  </div>;
+async function api<T>(path:string,options:RequestInit={}):Promise<T>{
+ const res=await fetch('/api/v1'+path,{...options,credentials:'include',headers:{'Content-Type':'application/json',...options.headers}});
+ const data=await res.json().catch(()=>({error:'Unexpected response from the server'}));
+ if(!res.ok)throw new Error(data.error||'Request failed');
+ return data as T;
+}
+const post=(path:string,value:unknown)=>api<any>(path,{method:'POST',body:JSON.stringify(value)});
+const initialZone=Intl.DateTimeFormat().resolvedOptions().timeZone||'Europe/London';
+function Alert({message,kind='error'}:{message:string;kind?:'error'|'success'}){return <div className={'alert '+kind} role="status">{kind==='error'?<AlertCircle size={19}/>:<CheckCircle2 size={19}/>}<span>{message}</span></div>}
+function Field({label,children}:{label:string;children:ReactNode}){return <label className="field"><span>{label}</span>{children}</label>}
+function Brand(){return <div className="brand"><div className="brand-mark"><CalendarCheck2 size={23}/></div><span>Shift<strong>Ledger</strong></span></div>}
+function Auth({onSuccess}:{onSuccess:()=>void}){
+ const params=new URLSearchParams(window.location.search);
+ const reset=params.get('reset');
+ const [mode,setMode]=useState<AuthMode>(reset?'reset':'login');
+ const [name,setName]=useState(''),[email,setEmail]=useState(''),[password,setPassword]=useState('');
+ const [busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
+ const verify=params.get('verify');
+ useEffect(()=>{if(!verify)return;let cancelled=false;post('/auth/verify',{token:verify}).then(()=>{if(!cancelled)setMessage('Email verified. Sign in to continue.')}).catch((e:Error)=>{if(!cancelled)setError(e.message)}).finally(()=>{window.history.replaceState({},'',window.location.pathname)});return()=>{cancelled=true}},[verify]);
+ async function submit(e:FormEvent){e.preventDefault();setError('');setMessage('');setBusy(true);
+  try{
+   if(mode==='register'){const r=await post('/auth/register',{name,email,password});setMessage(r.message);setMode('login');setPassword('')}
+   else if(mode==='login'){await post('/auth/login',{email,password});onSuccess()}
+   else if(mode==='forgot'){const r=await post('/auth/forgot-password',{email});setMessage(r.message)}
+   else{await post('/auth/reset-password',{token:reset,password});window.history.replaceState({},'',window.location.pathname);setMessage('Password updated. Sign in now.');setMode('login');setPassword('')}
+  }catch(e){setError((e as Error).message)}finally{setBusy(false)}
+ }
+ return <div className="auth-layout"><div className="auth-art"><Brand/><div><span className="overline">THE WORKFORCE PLATFORM</span><h1>Run your team.<br/>Own your time.</h1><p>Scheduling, time tracking and team management. One secure home for your organisation.</p><div className="auth-points"><span>01 / Plan smarter</span><span>02 / Stay organised</span><span>03 / Grow together</span></div></div><small>SHIFTLEDGER — BUILT FOR REAL TEAMS</small></div>
+ <div className="auth-side"><div className="auth-mobile-brand"><Brand/></div><div className="auth-card"><div className="overline">YOUR WORKSPACE STARTS HERE</div><h2>{mode==='login'?'Welcome back':mode==='register'?'Create your account':mode==='forgot'?'Reset your password':'Choose a new password'}</h2><p>{mode==='login'?'Sign in to manage your workforce.':mode==='register'?'Start with your work email. You’ll verify it before signing in.':mode==='forgot'?'We’ll email you a password-reset link.':'Enter a new password for your account.'}</p>
+ {error&&<Alert message={error}/ >}{message&&<Alert message={message} kind="success"/>}
+ <form onSubmit={submit} className="form-stack">{mode==='register'&&<Field label="Full name"><input required autoComplete="name" value={name} onChange={e=>setName(e.target.value)} minLength={2} maxLength={80}/></Field>}
+ {mode!=='reset'&&<Field label="Email address"><input type="email" required autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)}/></Field>}
+ {mode!=='forgot'&&<Field label="Password"><input type="password" required minLength={mode==='login'?1:12} maxLength={128} autoComplete={mode==='login'?'current-password':'new-password'} value={password} onChange={e=>setPassword(e.target.value)}/></Field>}
+ <button className="btn primary full" disabled={busy}>{busy?'Working…':mode==='login'?'Sign in':mode==='register'?'Create account':mode==='forgot'?'Send reset link':'Update password'} <ArrowRight size={18}/></button></form>
+ <div className="auth-links">{mode==='login'?<><button onClick={()=>{setMode('register');setError('');setMessage('')}}>Create an account</button><button onClick={()=>{setMode('forgot');setError('');setMessage('')}}>Forgot password?</button></>:<button onClick={()=>{setMode('login');setError('');setMessage('')}}>Back to sign in</button>}</div>
+ </div><div className="auth-copyright">Secure accounts · Organisation-level data separation</div></div></div>
+}
+function Onboard({refresh,name}:{refresh:()=>void;name:string}){
+ const [orgName,setOrgName]=useState(''),[country,setCountry]=useState('GB'),[currency,setCurrency]=useState('GBP'),[zone,setZone]=useState(initialZone),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ async function create(e:FormEvent){e.preventDefault();setBusy(true);setError('');try{await post('/organisations',{name:orgName,countryCode:country,currencyCode:currency,timeZone:zone});refresh()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
+ return <div className="onboard"><div className="onboard-top"><Brand/><span>ACCOUNT SETUP / 01</span></div><div className="onboard-body"><div className="onboard-heading"><div className="overline">WELCOME, {name.toUpperCase()}</div><h1>Let's set up your organisation.</h1><p>Each organisation has its own people, locations and schedule. Your information stays separated from other businesses.</p></div><section className="form-panel"><div className="section-title"><Building2 size={24}/><div><h2>Organisation details</h2><p>You can add locations and staff afterwards.</p></div></div>{error&&<Alert message={error}/>}<form className="form-stack" onSubmit={create}><Field label="Organisation name"><input required minLength={2} maxLength={100} placeholder="e.g. Cornerstone Coffee" value={orgName} onChange={e=>setOrgName(e.target.value)}/></Field><div className="form-grid"><Field label="Country code (ISO 2)"><input required maxLength={2} pattern="[A-Za-z]{2}" value={country} onChange={e=>setCountry(e.target.value.toUpperCase())}/></Field><Field label="Currency code (ISO 3)"><input required maxLength={3} pattern="[A-Za-z]{3}" value={currency} onChange={e=>setCurrency(e.target.value.toUpperCase())}/></Field></div><Field label="IANA time zone"><input required value={zone} onChange={e=>setZone(e.target.value)} placeholder="Europe/London"/></Field><button className="btn primary" disabled={busy}>{busy?'Creating…':'Create organisation'} <ArrowRight size={18}/></button></form></section></div></div>
+}
+function Stat({title,value,note}:{title:string;value:string|number;note:string}){return <div className="stat-card"><div className="stat-label">{title}</div><strong>{value}</strong><span>{note}</span></div>}
+function Empty({icon,heading,description}:{icon:ReactNode;heading:string;description:string}){return <div className="empty">{icon}<h3>{heading}</h3><p>{description}</p></div>}
+function Dashboard({user,org,onLogout,onSwitch}:{user:User;org:Org;onLogout:()=>void;onSwitch:()=>void}){
+ const [page,setPage]=useState<Page>('Overview'),[error,setError]=useState(''),[success,setSuccess]=useState('');
+ const [locations,setLocations]=useState<Location[]>([]),[employees,setEmployees]=useState<Employee[]>([]),[shifts,setShifts]=useState<Shift[]>([]);
+ const [locationName,setLocationName]=useState(''),[employeeName,setEmployeeName]=useState(''),[zone,setZone]=useState(org.time_zone);
+ const [newLocation,setNewLocation]=useState(''),[newEmployee,setNewEmployee]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState('');
+ const [busy,setBusy]=useState(false);
+ const canManage=['owner','admin','manager'].includes(org.role);
+ async function reload(){setError('');try{
+  const base='/organisations/'+org.id;
+  const responses=await Promise.all([api<{locations:Location[]}>(base+'/locations'),canManage?api<{employees:Employee[]}>(base+'/employees'):Promise.resolve({employees:[]}),canManage?api<{shifts:Shift[]}>(base+'/shifts'):Promise.resolve({shifts:[]})]);
+  setLocations(responses[0].locations);setEmployees(responses[1].employees);setShifts(responses[2].shifts);
+ }catch(e){setError((e as Error).message)}}
+ useEffect(()=>{void reload()},[org.id]);
+ async function action(fn:()=>Promise<any>,done:string){setBusy(true);setError('');setSuccess('');try{await fn();setSuccess(done);await reload()}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
+ const base='/organisations/'+org.id;
+ return <div className="app"><aside className="sidebar"><Brand/><button className="workspace" onClick={onSwitch}><div className="workspace-icon">{org.name.charAt(0).toUpperCase()}</div><div><strong>{org.name}</strong><small>{org.role} · Switch organisation</small></div></button><div className="nav-label">WORKSPACE</div><nav>{nav.map(({name,icon:Icon})=><button key={name} className={'nav-item '+(page===name?'selected':'')} onClick={()=>{setPage(name);setError('');setSuccess('')}}><Icon size={19}/><span>{name}</span></button>)}</nav><div className="sidebar-bottom"><div className="sidebar-callout"><ShieldCheck size={23}/><strong>Your data, your organisation.</strong><span>All workspace requests are checked on the server.</span></div><button className="profile" onClick={onLogout}><span className="profile-icon">{user.name.charAt(0).toUpperCase()}</span><span><strong>{user.name}</strong><small>Sign out</small></span><LogOut size={18}/></button></div></aside>
+ <div className="main"><header className="topbar"><div className="breadcrumb"><span>{org.name}</span><b>/</b><strong>{page}</strong></div><div className="top-right"><span className="role-tag">{org.role}</span><span className="profile-icon">{user.name.charAt(0).toUpperCase()}</span></div></header>
+ <main className="page"><div className="overline">SHIFTLEDGER / {page.toUpperCase()}</div><div className="page-heading"><div><h1>{page==='Overview'?'Your workforce, organised.':page}</h1><p>{page==='Overview'?'Your live organisation overview.':'Manage '+page.toLowerCase()+' for '+org.name+'.'}</p></div><button className="btn outline" onClick={()=>void reload()}><RefreshCcw size={17}/> Refresh</button></div>
+ {error&&<Alert message={error}/ >}{success&&<Alert message={success} kind="success"/>}
+ {page==='Overview'&&<><div className="hero-strip"><div><span>YOUR ORGANISATION</span><h2>{org.name}</h2><p>{org.country_code} · {org.time_zone} · {org.currency_code}</p></div><span className="hero-role">{org.role.toUpperCase()}</span></div><div className="stats"><Stat title="Team members" value={canManage?employees.length:'—'} note="Active directory records"/><Stat title="Locations" value={locations.length} note="Operating sites"/><Stat title="Shifts" value={canManage?shifts.length:'—'} note="Created records"/><Stat title="Published shifts" value={canManage?shifts.filter(s=>s.status==='published').length:'—'} note="Awaiting publication workflow"/></div><div className="two-col"><section className="panel"><div className="panel-title"><h2>Upcoming shifts</h2><span>From your live database</span></div>{shifts.length? <div className="records">{shifts.slice(0,6).map(s=><div className="record" key={s.id}><CalendarDays size={19}/><div><strong>{new Date(s.starts_at_utc).toLocaleString()}</strong><small>{s.status} · {locations.find(l=>l.id===s.location_id)?.name||'Location'}</small></div></div>)}</div>:<Empty icon={<CalendarDays size={32}/>} heading="No shifts created" description="Add a location and employee, then create your first draft shift."/>}</section><section className="panel"><div className="panel-title"><h2>Getting started</h2><span>Organisation setup</span></div><div className="steps"><div><b>01</b><span><strong>Organisation created</strong><small>Your workspace is ready.</small></span><CheckCircle2 size={18}/></div><div><b>02</b><span><strong>Add locations</strong><small>Set up the places you operate.</small></span></div><div><b>03</b><span><strong>Add your team</strong><small>Create employee directory records.</small></span></div><div><b>04</b><span><strong>Plan shifts</strong><small>Draft a schedule for your team.</small></span></div></div></section></div></>}
+ {page==='Settings'&&<div className="two-col"><section className="panel"><div className="panel-title"><h2>Organisation settings</h2></div><div className="details"><div><span>Name</span><strong>{org.name}</strong></div><div><span>Country</span><strong>{org.country_code}</strong></div><div><span>Time zone</span><strong>{org.time_zone}</strong></div><div><span>Currency</span><strong>{org.currency_code}</strong></div><div><span>Your role</span><strong>{org.role}</strong></div></div></section>{canManage&&<section className="panel"><div className="panel-title"><h2>Add a location</h2></div><form className="form-stack pad" onSubmit={e=>{e.preventDefault();void action(()=>post(base+'/locations',{name:locationName,timeZone:zone}),'Location created.');setLocationName('')}}><Field label="Location name"><input required minLength={2} value={locationName} onChange={e=>setLocationName(e.target.value)}/></Field><Field label="Time zone"><input required value={zone} onChange={e=>setZone(e.target.value)}/></Field><button className="btn primary" disabled={busy}><Plus size={17}/> Add location</button></form></section>}</div>}
+ {page==='Team'&&<div className="two-col"><section className="panel"><div className="panel-title"><h2>Employee directory</h2><span>{employees.length} records</span></div>{employees.length?<div className="records">{employees.map(e=><div className="record" key={e.id}><UsersRound size={20}/><div><strong>{e.display_name}</strong><small>{e.employment_status}</small></div></div>)}</div>:<Empty icon={<UsersRound size={33}/>} heading="No employees yet" description="Create your first employee directory record."/>}</section>{canManage&&<section className="panel"><div className="panel-title"><h2>Add employee</h2></div><form className="form-stack pad" onSubmit={e=>{e.preventDefault();void action(()=>post(base+'/employees',{name:employeeName}),'Employee added.');setEmployeeName('')}}><Field label="Full name"><input required minLength={2} value={employeeName} onChange={e=>setEmployeeName(e.target.value)}/></Field><div className="form-hint">Directory records aren't login accounts. Invitations are a separate workflow.</div><button disabled={busy} className="btn primary"><Plus size={17}/> Add employee</button></form></section>}</div>}
+ {page==='Schedule'&&<div className="two-col"><section className="panel"><div className="panel-title"><h2>Shift planner</h2><span>{shifts.length} records</span></div>{shifts.length?<div className="records">{shifts.map(s=><div className="record" key={s.id}><CalendarDays size={20}/><div><strong>{new Date(s.starts_at_utc).toLocaleString()} – {new Date(s.ends_at_utc).toLocaleString()}</strong><small>{s.status} · {employees.find(e=>e.id===s.employee_id)?.display_name||'Unassigned'} · {locations.find(l=>l.id===s.location_id)?.name||'Location'}</small></div></div>)}</div>:<Empty icon={<CalendarDays size={33}/>} heading="Your schedule is empty" description="Add a location and team member before creating a shift."/>}</section>{canManage&&<section className="panel"><div className="panel-title"><h2>Create draft shift</h2></div><form className="form-stack pad" onSubmit={e=>{e.preventDefault();void action(()=>post(base+'/shifts',{locationId:newLocation,employeeId:newEmployee||null,startsAt:new Date(start).toISOString(),endsAt:new Date(end).toISOString(),breakMinutes:0}),'Draft shift created.')}}><Field label="Location"><select required value={newLocation} onChange={e=>setNewLocation(e.target.value)}><option value="">Select a location</option>{locations.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></Field><Field label="Employee"><select value={newEmployee} onChange={e=>setNewEmployee(e.target.value)}><option value="">Unassigned</option>{employees.map(x=><option key={x.id} value={x.id}>{x.display_name}</option>)}</select></Field><Field label="Start (local browser time)"><input type="datetime-local" required value={start} onChange={e=>setStart(e.target.value)}/></Field><Field label="End (local browser time)"><input type="datetime-local" required value={end} onChange={e=>setEnd(e.target.value)}/></Field><div className="form-hint">Draft only. Shift publication and staff notifications are not enabled yet.</div><button className="btn primary" disabled={busy||!locations.length}><Plus size={17}/> Create draft shift</button></form></section>}</div>}
+ {(['Timesheets','Leave','Shift swaps','Reports'] as Page[]).includes(page)&&<section className="panel"><div className="panel-title"><h2>{page} module</h2><span>Not enabled</span></div><Empty icon={<ShieldCheck size={33}/>} heading="Not yet available" description="This module will not accept or simulate employee data until its API, permissions and approval flow are implemented."/></section>}
+ <footer>© ShiftLedger · Real organisation data · No simulated statistics</footer></main></div></div>;
+}
+function App(){
+ const [user,setUser]=useState<User|null>(null),[orgs,setOrgs]=useState<Org[]>([]),[org,setOrg]=useState<Org|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
+ async function refresh(){try{const x=await api<{user:User}>('/auth/me');setUser(x.user);const y=await api<{organisations:Org[]}>('/organisations');setOrgs(y.organisations);setOrg(current=>y.organisations.find(o=>o.id===current?.id)||y.organisations[0]||null);setError('')}catch(e){setUser(null);setOrgs([]);setOrg(null);const msg=(e as Error).message;if(msg!=='Sign in required')setError(msg)}finally{setLoading(false)}}
+ useEffect(()=>{void refresh()},[]);
+ async function logout(){try{await post('/auth/logout',{})}finally{setUser(null);setOrg(null);setOrgs([])}}
+ if(loading)return <div className="loading"><Brand/><p>Connecting to your workspace…</p></div>;
+ if(!user)return <>{error&&<div className="floating-error"><Alert message={error}/></div>}<Auth onSuccess={()=>void refresh()}/></>;
+ if(!org)return <Onboard name={user.name} refresh={()=>void refresh()}/>;
+ return <Dashboard key={org.id} user={user} org={org} onLogout={()=>void logout()} onSwitch={()=>{setOrg(null);setUser(null);void logout()}}/>;
 }
 export default App;
