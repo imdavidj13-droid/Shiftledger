@@ -124,7 +124,12 @@ function Auth({onSuccess}:{onSuccess:()=>void}){
  async function submit(e:FormEvent){e.preventDefault();setError('');setMessage('');setBusy(true);
   try{
    if(mode==='register'){const r=await post('/auth/register',{email,password});selectMode('pending');setMessage(r.message);setPassword('')}
-   else if(mode==='login'){await post('/auth/login',{email,password});onSuccess()}
+   else if(mode==='login'){
+    await post('/auth/login',{email,password});
+    const next=new URLSearchParams(window.location.search).get('next');
+    if(next&&/^\/app\/[a-zA-Z0-9_-]+\/[a-z-]+$/.test(next))window.history.replaceState({},'',next);
+    onSuccess();
+   }
    else if(mode==='pending'){const r=await post('/auth/resend-verification',{email});setMessage(r.message)}
    else if(mode==='forgot'){const r=await post('/auth/forgot-password',{email});setMessage(r.message)}
    else{await post('/auth/reset-password',{token:reset,password});window.history.replaceState({},'',window.location.pathname);selectMode('login');setMessage('Password updated. Sign in now.');setPassword('')}
@@ -158,6 +163,7 @@ const countryCodes = 'AF AX AL DZ AS AD AO AI AQ AG AR AM AW AU AT AZ BS BH BD B
 const countryNames = new Intl.DisplayNames(['en'],{type:'region'});
 const allCountries=countryCodes.map(code=>({code,name:countryNames.of(code)||code})).sort((a,b)=>a.name.localeCompare(b.name));
 function Onboard({refresh}:{refresh:()=>void}){
+ useEffect(()=>{if(window.location.pathname!=='/onboarding')window.history.replaceState({},'', '/onboarding');},[]);
  const [step,setStep]=useState(1);
  const [orgName,setOrgName]=useState(''),[industry,setIndustry]=useState(''),[teamSize,setTeamSize]=useState('');
  const [country,setCountry]=useState('GB'),[currency,setCurrency]=useState('GBP'),[zone,setZone]=useState(initialZone);
@@ -250,7 +256,10 @@ function Dashboard({user,org,organisations,onLogout,onSwitch}:{user:User;org:Org
 function App(){
  const verificationToken=new URLSearchParams(window.location.search).get('verify');
  const [user,setUser]=useState<User|null>(null),[orgs,setOrgs]=useState<Org[]>([]),[org,setOrg]=useState<Org|null>(null),[loading,setLoading]=useState(true),[error,setError]=useState('');
- async function refresh(){try{const x=await api<{user:User}>('/auth/me');setUser(x.user);const y=await api<{organisations:Org[]}>('/organisations');setOrgs(y.organisations);setOrg(current=>y.organisations.find(o=>o.id===pathOrganisation())||y.organisations.find(o=>o.id===current?.id)||y.organisations[0]||null);setError('')}catch(e){setUser(null);setOrgs([]);setOrg(null);const msg=(e as Error).message;if(msg!=='Sign in required')setError(msg)}finally{setLoading(false)}}
+ async function refresh(){try{const x=await api<{user:User}>('/auth/me');setUser(x.user);const y=await api<{organisations:Org[]}>('/organisations');setOrgs(y.organisations);setOrg(current=>y.organisations.find(o=>o.id===pathOrganisation())||y.organisations.find(o=>o.id===current?.id)||y.organisations[0]||null);setError('')}catch(e){setUser(null);setOrgs([]);setOrg(null);const msg=(e as Error).message;if(msg==='Sign in required'){
+   const requested=window.location.pathname;
+   if(requested.startsWith('/app/'))window.history.replaceState({},'', '/sign-in?next='+encodeURIComponent(requested));
+  }else setError(msg)}finally{setLoading(false)}}
  useEffect(()=>{void refresh()},[]);
  useEffect(()=>{
   const syncOrganisation=()=>{
@@ -260,7 +269,7 @@ function App(){
   window.addEventListener('popstate',syncOrganisation);
   return()=>window.removeEventListener('popstate',syncOrganisation);
  },[orgs]);
- async function logout(){try{await post('/auth/logout',{})}finally{setUser(null);setOrg(null);setOrgs([])}}
+ async function logout(){try{await post('/auth/logout',{})}finally{window.history.pushState({},'', '/sign-in');setUser(null);setOrg(null);setOrgs([])}}
  if(verificationToken)return <VerificationPage token={verificationToken}/>;
  if(window.location.pathname==='/preview/email-verified')return <VerificationPreview failed={false}/>;
  if(window.location.pathname==='/preview/email-verification-failed')return <VerificationPreview failed={true}/>;
