@@ -52,6 +52,8 @@ app.use('/api/*',async(c,next)=>{
   const origin=c.req.header('Origin');
   const self=new URL(c.req.url).origin;
   const dev=['http://localhost:5173','http://127.0.0.1:5173'].includes(origin||'');
+  const fetchSite=c.req.header('Sec-Fetch-Site');
+  if(!['GET','HEAD','OPTIONS'].includes(c.req.method)&&fetchSite==='cross-site')return fail(c,'Cross-site requests are not accepted',403);
   if(origin&&(origin===self||dev)){c.header('Access-Control-Allow-Origin',origin);c.header('Access-Control-Allow-Credentials','true');c.header('Vary','Origin');}
   if(c.req.method==='OPTIONS')return c.body(null,204);
   if(!['GET','HEAD'].includes(c.req.method)&&origin&&origin!==self&&!dev)return fail(c,'Untrusted origin',403);
@@ -73,6 +75,21 @@ app.post('/api/v1/auth/register',async c=>{
   const sent=await sendMail(c,email,'Verify your ShiftLedger email','Verify your account by visiting: '+link+'\nThis link expires in 24 hours.');
   if(!sent)return fail(c,'Account created, but email delivery failed. Contact support or retry verification.',503);
   return c.json({ok:true,message:'Check your email for a verification link.'},201);
+});
+app.post('/api/v1/auth/resend-verification',async c=>{
+  if(!c.env.RESEND_API_KEY||!c.env.MAIL_FROM||!c.env.APP_URL)return fail(c,'Email delivery is not configured.',503);
+  const x=await body(c),email=safeStr(x?.email,254).toLowerCase();
+  if(!isEmail(email))return fail(c,'Enter a valid email address',422);
+  const ip=c.req.header('CF-Connecting-IP')||'unknown';
+  if(!await rateLimit(c,'resend:'+ip+':'+email,3))return fail(c,'Too many requests. Try again in 15 minutes.',429);
+  const row=await c.env.DB.prepare('SELECT id,email_verified_at FROM users WHERE email_normalized=?').bind(email).first() as {id:string;email_verified_at:string|null}|null;
+  if(row&&!row.email_verified_at){
+    const token=await tokenFor(c,row.id,'verify_email');
+    const link=c.env.APP_URL.replace(/\/$/,'')+'/?verify='+encodeURIComponent(token);
+    const sent=await sendMail(c,email,'Verify your ShiftLedger email','Verify your email using this link: '+link+'\nThis link expires in 24 hours.');
+    if(!sent)return fail(c,'Could not deliver verification email. Please try again.',503);
+  }
+  return c.json({ok:true,message:'If this email needs verification, a new link has been sent.'});
 });
 app.post('/api/v1/auth/verify',async c=>{
   const x=await body(c);const token=safeStr(x?.token,128);
