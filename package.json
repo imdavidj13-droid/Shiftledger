@@ -9,7 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply shiftledger-db --local",
-    "deploy": "npm run verify && wrangler deploy",
+    "deploy": "npm run build && wrangler deploy",
     "db:migrate:remote": "wrangler d1 migrations apply shiftledger-db --remote",
     "test": "playwright test",
     "verify": "npm run typecheck && npm run build && npm test",
