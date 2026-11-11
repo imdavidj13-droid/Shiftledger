@@ -6,7 +6,7 @@ import type { Org, Location } from './Locations';
 import type { Shift } from './Rota';
 import './ScheduleCalendar.css';
 
-type CalendarView = 'month' | 'week' | 'day';
+type CalendarView = 'month' | 'week' | 'day' | 'team';
 type Day = Omit<ReturnType<typeof rotaDay>, 'previous' | 'next'>;
 type Props = {
   org: Org; locations: Location[]; locationFilter: string;
@@ -64,7 +64,7 @@ export function ScheduleCalendar({ org, locations, locationFilter, employees, as
   const coverageLabel = published.length ? Math.round(100*staffed/published.length)+'%' : '—';
   const activeHours = (filtered.reduce((sum,s)=>sum+periodMinutes(s),0)/60);
   const hoursLabel = Number.isInteger(activeHours) ? String(activeHours) : activeHours.toFixed(1);
-  const monthLabel = view==='month' ? month.label : view==='week' ? 'Week of '+days[0].label : visibleDay.label;
+  const monthLabel = view==='month' || view==='team' ? month.label : view==='week' ? 'Week of '+days[0].label : visibleDay.label;
   const daySlots = view==='month' ? [
     ...Array.from({length:month.leading},(_,i)=>({date:dayOffset(month.month,i-month.leading), inPeriod:false})),
     ...days.map(d=>({date:d.date,inPeriod:true})),
@@ -77,7 +77,7 @@ export function ScheduleCalendar({ org, locations, locationFilter, employees, as
         <span className="slc-eyebrow">SCHEDULE HUB</span>
         <div className="slc-date-heading"><h1>{monthLabel}</h1><button type="button" className="slc-title-chevron" aria-label="Choose calendar month" aria-expanded={showPicker} onClick={()=>setShowPicker(v=>!v)}><ChevronDown size={22}/></button></div>
         {showPicker&&<div className="slc-month-picker"><label>Go to month <input type="month" defaultValue={month.month} onChange={e=>{if(e.target.value)go(href(undefined,'month',e.target.value));}}/></label></div>}
-        <p><MapPin size={15}/>{locationFilter?locations.find(l=>l.id===locationFilter)?.name||'Location':'All locations'}<span className="slc-separator">|</span> {view==='month'?'Full team calendar':view==='week'?'Weekly team calendar':'Day schedule'}</p>
+        <p><MapPin size={15}/>{locationFilter?locations.find(l=>l.id===locationFilter)?.name||'Location':'All locations'}<span className="slc-separator">|</span> {view==='month'?'Full team calendar':view==='week'?'Weekly team calendar':view==='team'?'Team schedule by person':'Day schedule'}</p>
       </div>
       <div className="slc-kpis" aria-label="Schedule statistics for visible dates">
         <div className="slc-kpi"><UsersRound size={21}/><strong>{filtered.length}</strong><span>Shift records</span></div>
@@ -88,13 +88,13 @@ export function ScheduleCalendar({ org, locations, locationFilter, employees, as
       <nav className="slc-view-toggle" aria-label="Calendar view">
         <a href={href(undefined,'month',month.month)} aria-current={view==='month'?'page':undefined} className={view==='month'?'active':''}>Month</a>
         <a href={href(undefined,'week',week.start)} aria-current={view==='week'?'page':undefined} className={view==='week'?'active':''}>Week</a>
-        <a href={href(undefined,'day',selectedDate)} aria-current={view==='day'?'page':undefined} className={view==='day'?'active':''}>Day</a>
+        <a href={href(undefined,'team',month.month)} aria-current={view==='team'?'page':undefined} className={view==='team'?'active':''}>Team</a>
       </nav>
     </header>
     <div className="slc-toolbar">
       <div className="slc-toolbar-group">
         <a className="slc-tool" href={href(undefined,view,period.previous)} aria-label={'Previous '+view}><ChevronLeft size={19}/> Previous</a>
-        <a className="slc-tool" href={href(undefined,view,view==='month'?month.today.slice(0,7):month.today)}>Today</a>
+        <a className="slc-tool" href={href(undefined,view,view==='month'||view==='team'?month.today.slice(0,7):month.today)}>Today</a>
         <a className="slc-tool" href={href(undefined,view,period.next)} aria-label={'Next '+view}>Next <ChevronRight size={19}/></a>
       </div>
       <div className="slc-toolbar-group slc-toolbar-actions">
@@ -115,7 +115,21 @@ export function ScheduleCalendar({ org, locations, locationFilter, employees, as
     {coverage&&<div className="slc-filter-note"><Zap size={16}/> Showing published open shifts and leave-related coverage conflicts. <a href={href(undefined,view,date,undefined,false)}>Clear filter</a></div>}
     <div className="slc-workspace">
       <div className="slc-calendar" role="region" aria-label={monthLabel+' calendar'}>
-        <div className={'slc-grid slc-grid-'+view}>
+        {view==='team' ? <div className="slc-team-list">
+          <div className="slc-team-intro"><div><strong>Team schedule</strong><span>People and their shifts for {month.label.toLowerCase()}.</span></div><a href={appPath(org.id,'Team')}>Manage team <ArrowRight size={15}/></a></div>
+          {employees.filter(e=>e.employment_status==='active'&&(!locationFilter||assignments.some(a=>a.employee_id===e.id&&a.location_id===locationFilter))).map(employee=>{
+            const personal = filtered.filter(shift=>shift.employee_id===employee.id).sort((a,b)=>a.starts_at_utc.localeCompare(b.starts_at_utc));
+            return <div className="slc-team-row" key={employee.id}>
+              <div className="slc-team-identity"><span className="slc-avatar large">{initials(employee.display_name)}</span><div><strong>{employee.display_name}</strong><small>{personal.length} shifts · {(personal.reduce((t,s)=>t+periodMinutes(s),0)/60).toFixed(1)} planned hours</small></div></div>
+              <div className="slc-team-shifts">{personal.length?personal.slice(0,7).map(s=><a key={s.id} href={selectedDayHref(s)}>{new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short',timeZone:s.time_zone}).format(new Date(s.starts_at_utc))}<span>{formatShiftClock(s.starts_at_utc,s.time_zone,org.time_format)}</span>{s.status==='draft'&&<em>Unpublished</em>}</a>):<span className="slc-team-none">No shifts this month</span>}
+                {personal.length>7&&<span className="slc-team-none">+{personal.length-7} more shifts</span>}
+              </div>
+            </div>;
+          })}
+          {visibleTeam===0&&<div className="slc-team-none">No active staff assigned to this location. Add team members to see their schedules.</div>}
+          {filtered.some(vacancy)&&<div className="slc-team-row slc-open-row"><div className="slc-team-identity"><span className="slc-avatar large">+</span><div><strong>Open shifts</strong><small>Published vacancies awaiting an assignee</small></div></div>
+            <div className="slc-team-shifts">{filtered.filter(vacancy).map(s=><a key={s.id} href={selectedDayHref(s)}>{new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short',timeZone:s.time_zone}).format(new Date(s.starts_at_utc))}<span>{formatShiftClock(s.starts_at_utc,s.time_zone,org.time_format)}</span></a>)}</div></div>}
+        </div> : <div className={'slc-grid slc-grid-'+view}>
           {view==='month'&&month.weekdays.map((w,i)=><div key={'w'+i} className="slc-weekday">{w}</div>)}
           {daySlots.map(slot=>{
             const activeDay=slot.inPeriod ? days.find(d=>d.date===slot.date) : null;
@@ -138,7 +152,7 @@ export function ScheduleCalendar({ org, locations, locationFilter, employees, as
               {view==='month'&&matches.length===0&&slot.inPeriod&&selected&&<span className="slc-empty-selected">No shifts</span>}
             </div>;
           })}
-        </div>
+        </div>}
       </div>
       <aside className="slc-inspector" aria-label="Selected date and shift details">
         <div className="slc-inspector-header">
