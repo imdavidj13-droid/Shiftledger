@@ -34,6 +34,36 @@ export function go(path: string, replace = false, state: object = {}) {
   window.dispatchEvent(new Event('shiftledger:navigation'));
 }
 
+/**
+ * Route same-origin application links through React without reloading the document.
+ * Preserve regular browser behaviour for external URLs, downloads, target windows,
+ * modified clicks and unsupported pages.
+ */
+export function installClientNavigation() {
+  function handleClick(event: MouseEvent) {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const anchor = target.closest('a[href]');
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    if (anchor.hasAttribute('download') || (anchor.target && anchor.target !== '_self')) return;
+    const href = anchor.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+    const destination = new URL(anchor.href, window.location.href);
+    if (destination.origin !== window.location.origin) return;
+    if (!parseWorkspace(destination.pathname) &&
+      !['/', '/profile', '/onboarding', '/sign-in', '/register', '/forgot-password', '/check-email'].includes(destination.pathname)) return;
+    if (destination.href === window.location.href) {
+      event.preventDefault();
+      return;
+    }
+    event.preventDefault();
+    go(destination.pathname + destination.search + destination.hash);
+  }
+  document.addEventListener('click', handleClick);
+  return () => document.removeEventListener('click', handleClick);
+}
+
 function subscribe(listener: () => void) {
   window.addEventListener('popstate', listener);
   window.addEventListener('shiftledger:navigation', listener);
