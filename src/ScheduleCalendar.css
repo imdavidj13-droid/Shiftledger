@@ -54,3 +54,19 @@
 @media(max-width:1180px){.slc-workspace{grid-template-columns:minmax(0,1fr) 280px}.slc-position-pill{display:none}.slc-hero{grid-template-columns:1fr}.slc-hero-title{border-right:0;padding-right:0}.slc-view-toggle{grid-column:auto;justify-self:start}.slc-kpis{max-width:630px}}
 @media(max-width:860px){.slc-workspace{grid-template-columns:1fr}.slc-inspector{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.slc-inspector-header{grid-column:1/-1}.slc-calendar{overflow-x:auto}.slc-grid-month,.slc-grid-week{min-width:720px}.slc-toolbar{align-items:stretch}}
 @media(max-width:540px){.schedule-page .slc{padding:8px}.slc-hero{padding:18px 14px}.slc-date-heading h1{font-size:29px}.slc-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.slc-toolbar-group{gap:5px}.slc-tool{padding:8px 9px;font-size:11px}.slc-inspector{display:flex}.slc-grid-month,.slc-grid-week{min-width:735px}}
+
+
+/* Team mode uses real staff and assigned shifts, sharing the approved calendar inspector. */
+.slc-team-list{min-height:420px;background:#fff}
+.slc-team-intro{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:17px;border-bottom:2px solid #e1e9e0}
+.slc-team-intro strong,.slc-team-intro span{display:block}.slc-team-intro strong{font-size:17px}.slc-team-intro span{font-size:11px;color:#52735e;margin-top:4px}.slc-team-intro>a{display:flex;align-items:center;gap:6px;color:#075641;font-size:11px;font-weight:800}
+.slc-team-row{display:grid;grid-template-columns:minmax(145px,210px) minmax(0,1fr);border-bottom:1px solid #e1e9e0;gap:12px;align-items:center;padding:14px 12px}
+.slc-team-row:last-child{border-bottom:0}.slc-team-row.slc-open-row{background:#fff9e9}
+.slc-team-identity{display:flex;align-items:center;gap:9px;min-width:0}.slc-team-identity>div{min-width:0}
+.slc-team-identity strong{font-size:12px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.slc-team-identity small{font-size:10px;color:#5b7463;display:block;margin-top:5px}
+.slc-team-shifts{display:flex;align-items:center;flex-wrap:wrap;gap:7px}
+.slc-team-shifts>a{display:flex;align-items:center;gap:6px;background:#e4f2d9;color:#075641;border:1px solid #bed6bb;border-radius:6px;padding:8px 9px;font-size:11px;font-weight:800}
+.slc-team-shifts>a span{font-size:10px;font-weight:600}.slc-team-shifts>a em{font-style:normal;background:#ffe4b4;color:#604400;padding:3px 5px;border-radius:4px;font-size:9px}
+.slc-team-shifts>a:hover,.slc-team-shifts>a:focus-visible{background:#c9f05e;border-color:#075641}
+.slc-team-none{font-size:11px;color:#6a836e;padding:8px}
+@media(max-width:550px){.slc-team-row{grid-template-columns:1fr;gap:9px}.slc-team-intro{flex-wrap:wrap}}
