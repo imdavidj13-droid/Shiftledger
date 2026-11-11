@@ -138,7 +138,7 @@ export function Rota(props: Props) {
     });
     if (locationFilter) query.set('location', locationFilter);
     if (coverage) query.set('coverage', '1');
-    setBackgroundResult(null);
+    if (result) return () => controller.abort();
     setBackgroundError('');
     void loadShifts(base,query,false,controller.signal).then(data => {
       if (!controller.signal.aborted) setBackgroundResult(data);
@@ -149,23 +149,21 @@ export function Rota(props: Props) {
   }, [resourceId,base,month.month,locationFilter,coverage,zone]);
 
   if (resourceId === 'new') {
-    const closeHref = href(undefined, 'month', month.month);
-    const backgroundHref = (id?:string, targetView:CalendarView='month', targetDate:string=month.month, nextCursor?:string, onlyCoverage:boolean=coverage) =>
-      href(id, targetView, targetDate, nextCursor, onlyCoverage);
+    const closeHref = href(undefined,view,date);
     return <>
-      {backgroundResult
+      {(result || backgroundResult)
         ? <ScheduleCalendar org={org} locations={locations} locationFilter={locationFilter}
-            employees={props.employees} assignments={props.assignments} shifts={[...backgroundResult.shifts].reverse()}
-            view="month" days={month.days} month={month} week={week} period={month} date={month.month}
+            employees={props.employees} assignments={props.assignments} shifts={[...(result || backgroundResult)!.shifts].reverse()}
+            view={view} days={days} month={month} week={week} period={period} date={date}
             zone={zone} coverage={coverage} manage={manage} root={root} openShifts={openShifts}
-            href={backgroundHref} cursor={null} nextCursor={null}/>
+            href={href} cursor={cursor} nextCursor={null}/>
         : <div className="slc-background-loading" role="status">{backgroundError || 'Loading calendar…'}</div>}
       <CreateShiftDialog onClose={() => go(closeHref)}>
         {!manage ? <p className="alert error" role="alert">Only schedulers can create shifts.</p> :
           editorSource && loadedPath !== editorSource ? <p role="status">Loading shift template…</p> :
           error ? <p className="alert error" role="alert">{error}</p> :
           <ShiftEditor key={editorSource || 'new'} {...props} endpoint={base}
-            initialDate={presetEndpoint ? focusDate : view === 'day' ? day.date : undefined}
+            initialDate={params.get('selected') || (presetEndpoint ? focusDate : view === 'day' ? day.date : undefined)}
             initialOpen={params.get('open') === '1'}
             template={copyEndpoint ? record || undefined : undefined} preset={presetEndpoint ? preset || undefined : undefined}
             onSaved={id => {
