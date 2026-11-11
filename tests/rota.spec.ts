@@ -74,7 +74,7 @@ test('mobile week and shift URLs support direct entry, publishing and refresh', 
   await page.getByRole('link', { name: 'Add assigned shift' }).click();
   await expect(page).toHaveURL(/\/schedule\/new\?week=2031-11-03&location=north&selected=2031-11-03$/);
   await expect(page.getByRole('dialog', { name: 'Add shift' })).toBeVisible();
-  await expect(page.locator('.slc-grid-month')).toBeVisible();
+  await expect(page.locator('.slc-grid-week')).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Location', exact: true })).toHaveValue('north');
   await page.getByRole('combobox', { name: 'Employee', exact: true }).selectOption('shared');
   await page.getByLabel('Start', { exact: true }).fill('2031-11-03T09:00');
