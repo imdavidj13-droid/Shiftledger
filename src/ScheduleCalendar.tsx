@@ -42,6 +42,7 @@ export function ScheduleCalendar({ org, locations, locationFilter, employees, as
   const selectedDate = selectedRequested && /^\d{4}-\d{2}-\d{2}$/.test(selectedRequested) ? selectedRequested
     : days.some(d=>d.date===month.today) ? month.today : days[0].date;
   const visibleDay = rotaDay(selectedDate,zone);
+  const selectedWeekStart = rotaWeek(selectedDate,zone,org.week_start).start;
   const selectedShifts = filtered.filter(s=>s.starts_at_utc < visibleDay.to && s.ends_at_utc > visibleDay.from)
     .sort((a,b)=>a.starts_at_utc.localeCompare(b.starts_at_utc));
   const inspectId = route.searchParams.get('inspect');
@@ -87,7 +88,7 @@ export function ScheduleCalendar({ org, locations, locationFilter, employees, as
       </div>
       <nav className="slc-view-toggle" aria-label="Calendar view">
         <a href={href(undefined,'month',month.month)} aria-current={view==='month'?'page':undefined} className={view==='month'?'active':''}>Month</a>
-        <a href={href(undefined,'week',week.start)} aria-current={view==='week'?'page':undefined} className={view==='week'?'active':''}>Week</a>
+        <a href={href(undefined,'week',selectedWeekStart)} aria-current={view==='week'?'page':undefined} className={view==='week'?'active':''}>Week</a>
         <a href={href(undefined,'team',month.month)} aria-current={view==='team'?'page':undefined} className={view==='team'?'active':''}>Team</a>
       </nav>
     </header>
@@ -99,7 +100,7 @@ export function ScheduleCalendar({ org, locations, locationFilter, employees, as
       </div>
       <div className="slc-toolbar-group slc-toolbar-actions">
         {manage&&<a className="slc-tool" href={href('templates')} aria-label="Shift templates"><Layers3 size={17}/> Templates</a>}
-        {manage&&<a className="slc-tool" href={href('bulk','week',week.start)}><Copy size={17}/> Copy week</a>}
+        {manage&&<a className="slc-tool" href={href('bulk','week',selectedWeekStart)}><Copy size={17}/> Copy week</a>}
         {manage&&<a className={'slc-tool '+(coverage?'selected':'')} href={href(undefined,view,date,undefined,!coverage)} aria-label="Needs cover"><ShieldCheck size={17}/> {coverage?'All shifts':'Needs cover'}</a>}
         {manage&&<div className="slc-add-container">
           <button type="button" className="slc-add-main" onClick={()=>setMenuOpen(v=>!v)} aria-expanded={menuOpen} aria-controls="slc-add-menu"><Plus size={20}/> Add shift <ChevronDown size={16}/></button>
