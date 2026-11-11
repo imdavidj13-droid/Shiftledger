@@ -168,7 +168,11 @@ export function Rota(props: Props) {
             initialDate={presetEndpoint ? focusDate : view === 'day' ? day.date : undefined}
             initialOpen={params.get('open') === '1'}
             template={copyEndpoint ? record || undefined : undefined} preset={presetEndpoint ? preset || undefined : undefined}
-            onSaved={id => go(href(id), true)}/>}
+            onSaved={id => {
+              const selectedDate = params.get('date') || (presetEndpoint ? focusDate : day.date);
+              const target = href(undefined, 'month', selectedDate.slice(0,7));
+              go(target + '&selected=' + encodeURIComponent(selectedDate) + '&inspect=' + encodeURIComponent(id), true);
+            }}/>}
       </CreateShiftDialog>
     </>;
   }
