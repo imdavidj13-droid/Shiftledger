@@ -29,7 +29,7 @@ type Props = {
   locationFilter: string; resourceId?: string; openShifts: boolean;
 };
 
-type CalendarView = 'week' | 'month' | 'day';
+type CalendarView = 'week' | 'month' | 'day' | 'team';
 type ShiftPage = { shifts: Shift[]; nextCursor: string | null };
 type ShiftClaim = { id: string; employee_name: string; status: 'pending' | 'approved' | 'declined' | 'cancelled' };
 
@@ -45,6 +45,7 @@ function shiftName(shift: Shift) {
 
 function calendarQuery(view: CalendarView, date: string) {
   if (view === 'week') return new URLSearchParams({ week: date });
+  if (view === 'team') return new URLSearchParams({ view, month: date });
   return new URLSearchParams(view === 'month' ? { view, month: date } : { view, date });
 }
 
@@ -71,14 +72,14 @@ export function Rota(props: Props) {
   const isBulk = resourceId === 'bulk';
   const shiftId = isBulk ? undefined : resourceId;
   const viewParam = isBulk ? 'week' : params.get('view') || (params.has('week') ? 'week' : null);
-  const view: CalendarView = viewParam === 'week' || viewParam === 'day' ? viewParam : 'month';
+  const view: CalendarView = viewParam === 'week' || viewParam === 'day' || viewParam === 'team' ? viewParam : 'month';
   const week = rotaWeek(params.get('week') || params.get('date'), zone, org.week_start);
   const month = rotaMonth(params.get('month') || params.get('date')?.slice(0,7) || params.get('week')?.slice(0,7) || null, zone, org.week_start);
   const day = rotaDay(params.get('date'), zone);
-  const days = view === 'month' ? month.days : view === 'day' ? [day] : week.days;
-  const date = view === 'month' ? month.month : view === 'day' ? day.date : week.start;
-  const focusDate = view === 'month' ? (month.today.startsWith(date) ? month.today : days[0].date) : date;
-  const period = view === 'month' ? month : view === 'day' ? day : week;
+  const days = view === 'month' || view === 'team' ? month.days : view === 'day' ? [day] : week.days;
+  const date = view === 'month' || view === 'team' ? month.month : view === 'day' ? day.date : week.start;
+  const focusDate = view === 'month' || view === 'team' ? (month.today.startsWith(date) ? month.today : days[0].date) : date;
+  const period = view === 'month' || view === 'team' ? month : view === 'day' ? day : week;
   const manage = org.role !== 'employee';
   const coverage = manage && params.get('coverage') === '1';
   const base = '/organisations/' + org.id + '/shifts';
