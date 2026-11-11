@@ -73,7 +73,7 @@ export function Rota(props: Props) {
   const shiftId = isBulk ? undefined : resourceId;
   const viewParam = isBulk ? 'week' : params.get('view') || (params.has('week') ? 'week' : null);
   const view: CalendarView = viewParam === 'week' || viewParam === 'day' || viewParam === 'team' ? viewParam : 'month';
-  const week = rotaWeek(params.get('week') || params.get('date'), zone, org.week_start);
+  const week = rotaWeek(params.get('week') || params.get('date') || (params.get('month') ? params.get('month') + '-01' : null), zone, org.week_start);
   const month = rotaMonth(params.get('month') || params.get('date')?.slice(0,7) || params.get('week')?.slice(0,7) || null, zone, org.week_start);
   const day = rotaDay(params.get('date'), zone);
   const days = view === 'month' || view === 'team' ? month.days : view === 'day' ? [day] : week.days;
