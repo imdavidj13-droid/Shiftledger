@@ -7,7 +7,7 @@ import type { Shift } from './Rota';
 import './ScheduleCalendar.css';
 
 type CalendarView = 'month' | 'week' | 'day';
-type Day = ReturnType<typeof rotaDay>;
+type Day = Omit<ReturnType<typeof rotaDay>, 'previous' | 'next'>;
 type Props = {
   org: Org; locations: Location[]; locationFilter: string;
   employees: {id: string; display_name: string; employment_status: string}[];
