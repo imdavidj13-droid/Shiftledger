@@ -157,22 +157,34 @@ export function Rota(props: Props) {
   const today = month.today;
   return <section className="rota">
     <div className="rota-toolbar">
-      <div><h2>{manage ? { week: 'Week view', month: 'Calendar', day: 'Day view' }[view] : 'My schedule'}</h2>
-        <p>{view === 'month' ? month.label : view === 'day' ? day.label : 'Week starting ' + days[0].label} · Calendar dates in {zone}</p></div>
-      <div className="rota-controls">
+      <div className="rota-period">
+        <span className="rota-eyebrow">TEAM CALENDAR</span>
+        <h2>{view === 'month' ? month.label : view === 'day' ? day.label : 'Week of ' + days[0].label}</h2>
+        <p>{locationFilter ? locations.find(location => location.id === locationFilter)?.name : 'All locations'} · {zone}</p>
+      </div>
+      <div className="rota-controls rota-primary-controls">
+        <div className="rota-period-navigation" aria-label="Calendar navigation">
+          <a className="btn outline rota-arrow" aria-label={'Previous ' + view} href={href(undefined, view, period.previous)}>‹</a>
+          <a className="btn outline" href={href(undefined, view, view === 'month' ? today.slice(0, 7) : today)}>Today</a>
+          <a className="btn outline rota-arrow" aria-label={'Next ' + view} href={href(undefined, view, period.next)}>›</a>
+        </div>
         <nav className="rota-controls rota-views" aria-label="Calendar view">
           <a className={'btn ' + (view === 'week' ? 'primary' : 'outline')} aria-current={view === 'week' ? 'page' : undefined} href={href(undefined, 'week', focusDate)}>Week</a>
           <a className={'btn ' + (view === 'month' ? 'primary' : 'outline')} aria-current={view === 'month' ? 'page' : undefined} href={href(undefined, 'month', focusDate.slice(0, 7))}>Month</a>
         </nav>
-        <a className="btn outline" href={href(undefined, view, period.previous)}>Previous {view}</a>
-        <a className="btn outline" href={href(undefined, view, view === 'month' ? today.slice(0, 7) : today)}>{view === 'week' ? 'This week' : 'Today'}</a>
-        <a className="btn outline" href={href(undefined, view, period.next)}>Next {view}</a>
-        {manage && <a className={'btn ' + (coverage ? 'primary' : 'outline')} aria-current={coverage ? 'true' : undefined}
-          href={href(undefined, view, date, undefined, !coverage)}>{coverage ? 'Show all shifts' : 'Needs cover'}</a>}
-        {manage && view === 'week' && <a className="btn outline" href={href('bulk')}>Copy or publish shifts</a>}
-        {manage && <a className="btn outline" href={href('templates')}>Shift templates</a>}
-        {manage && <div className="rota-quick-wrapper"><button type="button" className="btn primary" aria-expanded={quickMenuOpen} aria-controls="rota-quick-actions" onClick={() => setQuickMenuOpen(open => !open)}>+ Add <span aria-hidden="true">⌄</span></button>
-          {quickMenuOpen && <div className="rota-quick-menu" id="rota-quick-actions"><a href={href('new','day',today)}>+ Add shift</a><a href={href('new','day',today) + '&open=1'}>+ Open shift</a><a href={appPath(org.id,'Team')}>+ Add team member</a><a href={appPath(org.id,'Setup') + '?step=3'}>+ Add job position</a></div>}</div>}
+        {manage && <div className="rota-quick-wrapper">
+          <button type="button" className="btn primary" aria-expanded={quickMenuOpen} aria-controls="rota-quick-actions" onClick={() => setQuickMenuOpen(open => !open)}>+ Add <span aria-hidden="true">⌄</span></button>
+          {quickMenuOpen && <div className="rota-quick-menu" id="rota-quick-actions">
+            <a href={href('new','day',today)}>Add shift</a>
+            <a href={href('new','day',today) + '&open=1'}>Add open shift</a>
+            <a href={appPath(org.id,'Team')}>Add team member</a>
+            <a href={appPath(org.id,'Setup') + '?step=3'}>Add job position</a>
+            <div className="rota-menu-separator"/>
+            <a href={href(undefined, view, date, undefined, !coverage)}>{coverage ? 'Show every shift' : 'Show shifts needing cover'}</a>
+            {view === 'week' && <a href={href('bulk')}>Copy week / bulk publish</a>}
+            <a href={href('templates')}>Manage shift templates</a>
+          </div>}
+        </div>}
       </div>
     </div>
     {coverage && <p className="alert" role="status">Showing open vacancies and shifts that overlap approved leave.</p>}
@@ -201,7 +213,7 @@ export function Rota(props: Props) {
           </li>)}</ul>}
           {vacancies > 0 && <a className="rota-more" href={daily} aria-label={day.label + ', ' + vacancies + ' open shifts'}>{vacancies} open</a>}
           {records.length > shown.length && <a className="rota-more" href={daily} aria-label={day.label + ', ' + records.length + ' shifts'}>+{records.length - shown.length} more</a>}
-          {manage && <a className="rota-day-add" href={href('new','day',day.date)} aria-label={'Add shift on ' + day.label}>+ Add shift</a>}
+          {manage && <a className="rota-day-add" href={href('new','day',day.date)} aria-label={'Add shift on ' + day.label} title={'Add shift on ' + day.label}>+</a>}
         </section>;
       })}
       {view === 'month' && Array.from({ length: month.trailing }, (_, index) => <div className="rota-blank" key={'after-' + index} aria-hidden="true"/>)}
