@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type MouseEvent } from 'react';
 import { ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Layers3, MapPin, MoreHorizontal, Plus, ShieldCheck, UsersRound, X, Zap } from 'lucide-react';
 import { appPath, go, useRoute } from './routes';
 import { formatShiftClock, rotaMonth, rotaWeek, rotaDay } from './time';
@@ -72,6 +72,17 @@ export function ScheduleCalendar({ org, locations, locationFilter, employees, as
     ...Array.from({length:month.trailing},(_,i)=>({date:dayOffset(month.month,month.days.length+i),inPeriod:false}))
   ] : days.map(d=>({date:d.date,inPeriod:true}));
   const shiftLink = (day:string, id:string) => selectionHref(day,id);
+  const addHref = (day:string,open=false) => {
+    const url = new URL(href('new',view,date), 'https://shiftledger.invalid');
+    url.searchParams.set('selected',day);
+    if(open) url.searchParams.set('open','1');
+    return url.pathname + url.search;
+  };
+  const clientNavigate = (event:MouseEvent<HTMLAnchorElement>) => {
+    if(event.button!==0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    go(event.currentTarget.getAttribute('href') || href());
+  };
   return <section className="slc" aria-label="Schedule calendar">
     <header className="slc-hero">
       <div className="slc-hero-title">
@@ -105,8 +116,8 @@ export function ScheduleCalendar({ org, locations, locationFilter, employees, as
         {manage&&<div className="slc-add-container">
           <button type="button" className="slc-add-main" onClick={()=>setMenuOpen(v=>!v)} aria-expanded={menuOpen} aria-controls="slc-add-menu"><Plus size={20}/> Add shift <ChevronDown size={16}/></button>
           {menuOpen&&<div className="slc-add-menu" id="slc-add-menu">
-            <a href={href('new','day',selectedDate)}>Add assigned shift</a>
-            {openShifts&&<a href={href('new','day',selectedDate)+'&open=1'}>Add open shift</a>}
+            <a href={addHref(selectedDate)} onClick={clientNavigate}>Add assigned shift</a>
+            {openShifts&&<a href={addHref(selectedDate,true)} onClick={clientNavigate}>Add open shift</a>}
             <a href={appPath(org.id,'Team')}>Add employee</a>
             <a href={appPath(org.id,'Setup')+'?step=3'}>Add job position</a>
           </div>}
@@ -140,7 +151,7 @@ export function ScheduleCalendar({ org, locations, locationFilter, employees, as
             const selected=slot.date===selectedDate;
             return <div className={'slc-day'+(!slot.inPeriod?' outside':'')+(selected?' selected':'')+(slot.date===month.today?' today':'')} key={slot.date}>
               <div className="slc-day-top"><a href={selectionHref(slot.date)} aria-label={'Select '+slotDay.label} aria-current={selected?'date':undefined}>{view==='month'?Number(slot.date.slice(-2)):slotDay.label}</a>
-                {manage&&slot.inPeriod&&<a className="slc-cell-add" aria-label={'Add shift on '+slotDay.label} title="Add shift" href={href('new','day',slot.date)}><Plus size={15}/></a>}
+                {manage&&slot.inPeriod&&<a className="slc-cell-add" aria-label={'Add shift on '+slotDay.label} title="Add shift" href={addHref(slot.date)} onClick={clientNavigate}><Plus size={15}/></a>}
               </div>
               <div className="slc-shift-stack">{shown.map(s=><a key={s.id} href={shiftLink(slot.date,s.id)}
                 className={'slc-shift '+(vacancy(s)?'open':s.status)+(s.id===selectedShift?.id&&selected?' current':'')}
@@ -175,9 +186,9 @@ export function ScheduleCalendar({ org, locations, locationFilter, employees, as
             <a className="slc-edit" href={href(selectedShift.id)}>Edit / details <ArrowRight size={16}/></a>
             {manage&&<a className="slc-icon-button" href={href('new')+'&copy='+encodeURIComponent(selectedShift.id)} aria-label="Duplicate shift"><Copy size={18}/></a>}
           </div>
-        </div> : <div className="slc-inspector-empty"><CalendarDays size={34}/><strong>No shifts on this day</strong><span>Select another date or add a shift.</span>{manage&&<a className="slc-edit" href={href('new','day',selectedDate)}>Add a shift <Plus size={15}/></a>}</div>}
+        </div> : <div className="slc-inspector-empty"><CalendarDays size={34}/><strong>No shifts on this day</strong><span>Select another date or add a shift.</span>{manage&&<a className="slc-edit" href={addHref(selectedDate)} onClick={clientNavigate}>Add a shift <Plus size={15}/></a>}</div>}
         {selectedShifts.length>1&&<div className="slc-inspector-others"><h3>Other shifts on this day ({selectedShifts.length-1})</h3>{selectedShifts.filter(s=>s.id!==selectedShift?.id).map(s=><a key={s.id} href={selectedDayHref(s)}><span className="slc-avatar">{initials(label(s))}</span><span><strong>{formatShiftClock(s.starts_at_utc,s.time_zone,org.time_format)} – {formatShiftClock(s.ends_at_utc,s.time_zone,org.time_format)}</strong><small>{label(s)}</small></span><ChevronRight size={17}/></a>)}</div>}
-        {manage&&<a className="slc-inspector-add" href={href('new','day',selectedDate)}><Plus size={17}/> Add shift on this day</a>}
+        {manage&&<a className="slc-inspector-add" href={addHref(selectedDate)} onClick={clientNavigate}><Plus size={17}/> Add shift on this day</a>}
       </aside>
     </div>
     {(cursor||nextCursor)&&<div className="slc-pagination">{cursor&&<a href={href()}>First page</a>}{nextCursor&&<a href={href(undefined,'week',week.start,nextCursor)}>More shifts</a>}</div>}
