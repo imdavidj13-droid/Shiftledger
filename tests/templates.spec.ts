@@ -46,6 +46,9 @@ test('manager creates and reuses a persisted overnight template from the rota', 
   await page.getByRole('combobox',{name:'Employee',exact:true}).selectOption('shared');
   await page.getByLabel('Save without publishing').check();
   await page.getByRole('button',{name:'Save shift without publishing'}).click();
+  await expect(page.getByRole('dialog',{name:'Add shift'})).toHaveCount(0);
+  await expect(page).toHaveURL(/inspect=/);
+  await page.getByRole('link',{name:'Edit / details'}).click();
   await expect(page.getByRole('heading',{name:'Shared employee',exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Publish shift'})).toBeVisible();
 });
