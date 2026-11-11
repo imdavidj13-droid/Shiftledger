@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api, write } from './api';
 import { RotaBatch } from './RotaBatch';
+import { ScheduleCalendar } from './ScheduleCalendar';
 import type { ShiftTemplate } from './RotaTemplates';
 import type { Location, Org } from './Locations';
 import { appPath, go, useRoute } from './routes';
-import { branchInstant, branchWallTime, formatShiftTime, formatShiftClock, isRepeatedTime, moveWallTime, rotaDay, rotaMonth, rotaWeek, shiftOccurrence } from './time';
+import { branchInstant, branchWallTime, formatShiftTime, isRepeatedTime, moveWallTime, rotaDay, rotaMonth, rotaWeek, shiftOccurrence } from './time';
 
 export type Shift = {
   id: string;
@@ -92,7 +93,6 @@ export function Rota(props: Props) {
   const [result, setResult] = useState<ShiftPage | null>(null);
   const [record, setRecord] = useState<Shift | null>(null);
   const [preset, setPreset] = useState<ShiftTemplate | null>(null);
-  const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const [loadedPath, setLoadedPath] = useState('');
   const [error, setError] = useState('');
   const cursor = view === 'week' && !isBulk ? params.get('cursor') : null;
@@ -154,75 +154,11 @@ export function Rota(props: Props) {
       {...props} endpoint={endpoint} shift={record} onSaved={async () => setRecord((await api<{ shift: Shift }>(endpoint)).shift)}/>}</>;
 
   const shifts = [...(result?.shifts ?? [])].reverse();
-  const today = month.today;
-  return <section className="rota">
-    <div className="rota-toolbar">
-      <div className="rota-period">
-        <span className="rota-eyebrow">TEAM CALENDAR</span>
-        <h2>{view === 'month' ? month.label : view === 'day' ? day.label : 'Week of ' + days[0].label}</h2>
-        <p>{locationFilter ? locations.find(location => location.id === locationFilter)?.name : 'All locations'} · {zone}</p>
-      </div>
-      <div className="rota-controls rota-primary-controls">
-        <div className="rota-period-navigation" aria-label="Calendar navigation">
-          <a className="btn outline rota-arrow" aria-label={'Previous ' + view} href={href(undefined, view, period.previous)}>‹</a>
-          <a className="btn outline" href={href(undefined, view, view === 'month' ? today.slice(0, 7) : today)}>Today</a>
-          <a className="btn outline rota-arrow" aria-label={'Next ' + view} href={href(undefined, view, period.next)}>›</a>
-        </div>
-        <nav className="rota-controls rota-views" aria-label="Calendar view">
-          <a className={'btn ' + (view === 'week' ? 'primary' : 'outline')} aria-current={view === 'week' ? 'page' : undefined} href={href(undefined, 'week', focusDate)}>Week</a>
-          <a className={'btn ' + (view === 'month' ? 'primary' : 'outline')} aria-current={view === 'month' ? 'page' : undefined} href={href(undefined, 'month', focusDate.slice(0, 7))}>Month</a>
-        </nav>
-        {manage && <div className="rota-quick-wrapper">
-          <button type="button" className="btn primary" aria-expanded={quickMenuOpen} aria-controls="rota-quick-actions" onClick={() => setQuickMenuOpen(open => !open)}>+ Add <span aria-hidden="true">⌄</span></button>
-          {quickMenuOpen && <div className="rota-quick-menu" id="rota-quick-actions">
-            <a href={href('new','day',today)}>Add shift</a>
-            <a href={href('new','day',today) + '&open=1'}>Add open shift</a>
-            <a href={appPath(org.id,'Team')}>Add team member</a>
-            <a href={appPath(org.id,'Setup') + '?step=3'}>Add job position</a>
-            <div className="rota-menu-separator"/>
-            <a href={href(undefined, view, date, undefined, !coverage)}>{coverage ? 'Show every shift' : 'Show shifts needing cover'}</a>
-            {view === 'week' && <a href={href('bulk')}>Copy week / bulk publish</a>}
-            <a href={href('templates')}>Manage shift templates</a>
-          </div>}
-        </div>}
-      </div>
-    </div>
-    {coverage && <p className="alert" role="status">Showing open vacancies and shifts that overlap approved leave.</p>}
-    <div className={'rota-days rota-view-' + view}>
-      {view === 'month' && <>
-        {month.weekdays.map((label, index) => <div key={index} className="rota-weekday">{label}</div>)}
-        {Array.from({ length: month.leading }, (_, index) => <div className="rota-blank" key={'before-' + index} aria-hidden="true"/>)}
-      </>}
-      {days.map(day => {
-        const records = shifts.filter(shift => shift.starts_at_utc < day.to && shift.ends_at_utc > day.from);
-        const shown = view === 'month' ? records.slice(0, 2) : records;
-        const vacancies = view === 'month' ? records.filter(isVacancy).length : 0;
-        const daily = href(undefined, 'day', day.date);
-        return <section className="rota-day" key={day.date}>
-          <h3>{view === 'day' ? day.label : <a href={daily} aria-label={'View ' + day.label} aria-current={day.date === today ? 'date' : undefined}>{view === 'month' ? day.number : day.label}</a>}</h3>
-          {!shown.length ? view !== 'month' && <p>No shifts</p> : <ul>{shown.map(shift => <li key={shift.id}>
-            <a className={'rota-shift ' + shift.status + (isVacancy(shift) ? ' rota-vacancy' : '')} href={href(shift.id)}>
-              <strong>{shiftName(shift)}</strong>
-              {Boolean(shift.leave_conflict) && <span className="rota-warning">Approved leave</span>}
-              {view === 'month'
-                ? <span>{shift.starts_at_utc < day.from ? 'Continues' : formatShiftClock(shift.starts_at_utc, shift.time_zone, org.time_format)} · {shift.status}</span>
-                : <><span>{shift.location_name} · {shift.status}</span>
-                  <span>{formatShiftTime(shift.starts_at_utc, shift.time_zone, org.time_format)}</span>
-                  {shift.starts_at_utc < day.from && <span>Continues from previous day</span>}</>}
-            </a>
-          </li>)}</ul>}
-          {vacancies > 0 && <a className="rota-more" href={daily} aria-label={day.label + ', ' + vacancies + ' open shifts'}>{vacancies} open</a>}
-          {records.length > shown.length && <a className="rota-more" href={daily} aria-label={day.label + ', ' + records.length + ' shifts'}>+{records.length - shown.length} more</a>}
-          {manage && <a className="rota-day-add" href={href('new','day',day.date)} aria-label={'Add shift on ' + day.label} title={'Add shift on ' + day.label}>+</a>}
-        </section>;
-      })}
-      {view === 'month' && Array.from({ length: month.trailing }, (_, index) => <div className="rota-blank" key={'after-' + index} aria-hidden="true"/>)}
-    </div>
-    {(cursor || result?.nextCursor) && <div className="rota-controls pagination">
-      {cursor && <a className="btn outline" href={href()}>First page</a>}
-      {result?.nextCursor && <a className="btn outline" href={href(undefined, 'week', week.start, result.nextCursor)}>More shifts in this week</a>}
-    </div>}
-  </section>;
+  return <ScheduleCalendar org={org} locations={locations} locationFilter={locationFilter}
+    employees={props.employees} assignments={props.assignments} shifts={shifts}
+    view={view} days={days} month={month} week={week} period={period} date={date}
+    zone={zone} coverage={coverage} manage={manage} root={root} openShifts={openShifts}
+    href={href} cursor={cursor} nextCursor={result?.nextCursor ?? null}/>;
 }
 
 function ShiftDetails({ record, org, manage, endpoint, onChanged, onDiscard, copyHref, openShifts }: {
