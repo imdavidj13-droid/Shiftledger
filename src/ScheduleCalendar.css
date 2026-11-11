@@ -70,3 +70,22 @@
 .slc-team-shifts>a:hover,.slc-team-shifts>a:focus-visible{background:#c9f05e;border-color:#075641}
 .slc-team-none{font-size:11px;color:#6a836e;padding:8px}
 @media(max-width:550px){.slc-team-row{grid-template-columns:1fr;gap:9px}.slc-team-intro{flex-wrap:wrap}}
+
+
+/* Shift editor overlays the real calendar; only the dialog is interactive. */
+.slc-background-loading{padding:32px;color:#315b43;font-size:14px}
+.slc-dialog-backdrop{position:fixed;inset:0;z-index:100;background:rgba(16,38,31,.6);display:flex;align-items:center;justify-content:center;padding:18px}
+.slc-dialog{width:min(100%,670px);max-height:min(92vh,850px);min-height:0;overflow-y:auto;overscroll-behavior:contain;background:#fff;color:#10261f;border:3px solid #075641;border-radius:14px;outline:none}
+.slc-dialog-top{position:sticky;top:0;z-index:1;background:#075641;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:15px;padding:18px 23px;border-bottom:4px solid #c9f05e}
+.slc-dialog-top>div{display:flex;flex-direction:column;gap:5px}.slc-dialog-top span{font-size:10px;letter-spacing:1.5px;color:#c9f05e;font-weight:800}
+.slc-dialog-top strong{font-size:23px;letter-spacing:-.5px}
+.slc-dialog-close{display:grid;place-items:center;min-width:38px;height:38px;border:1px solid #b7e1bf;background:#fff;color:#075641;border-radius:8px;font-size:25px;line-height:1}
+.slc-dialog-close:hover,.slc-dialog-close:focus-visible{background:#c9f05e}
+.slc-dialog-content{padding:22px}
+.slc-dialog .rota-detail{margin:0;max-width:none;min-height:0;border:0;border-radius:0}
+.slc-dialog .rota-detail>.panel-title{display:none}
+.slc-dialog .form-stack.pad{padding:0}
+.slc-dialog .field{font-size:12px}
+.slc-dialog .btn.primary{background:#c9f05e;color:#075641;align-self:flex-end;min-width:175px}
+.slc-dialog .form-hint{border-radius:5px}
+@media(max-width:600px){.slc-dialog-backdrop{padding:0;align-items:flex-end}.slc-dialog{width:100%;max-height:96vh;border-radius:15px 15px 0 0;border-bottom:0}.slc-dialog-top{padding:14px 17px}.slc-dialog-content{padding:16px}.slc-dialog .form-grid{grid-template-columns:1fr}.slc-dialog .btn.primary{width:100%}}
