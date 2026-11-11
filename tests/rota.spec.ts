@@ -59,8 +59,8 @@ test('mobile week and shift URLs support direct entry, publishing and refresh', 
   await expect(page).toHaveURL(/\/schedule\/new\?view=day&date=2031-11-03&location=north$/);
   await expect(page.getByRole('combobox', { name: 'Location', exact: true })).toHaveValue('north');
   await page.getByRole('combobox', { name: 'Employee', exact: true }).selectOption('shared');
-  await page.getByLabel('Start', { exact: true }).fill('2031-11-05T09:00');
-  await page.getByLabel('End', { exact: true }).fill('2031-11-05T17:00');
+  await page.getByLabel('Start', { exact: true }).fill('2031-11-03T09:00');
+  await page.getByLabel('End', { exact: true }).fill('2031-11-03T17:00');
   await page.getByLabel('Save without publishing').check();
   await page.getByRole('button', { name: 'Save shift without publishing' }).click();
   await expect(page.getByRole('heading', { name: 'Shared employee' })).toBeVisible();
@@ -92,7 +92,7 @@ test('monthly grid shows real shifts, date inspector and branch filtering', asyn
   await page.goto('/app/shop/schedule?view=month&month=2032-02&location=north');
   await expect(page.getByRole('heading', { name: 'February 2032' })).toBeVisible();
   await expect(page.locator('.slc-grid-month .slc-day:not(.outside)')).toHaveCount(29);
-  const leapDay = page.locator('.slc-day').filter({ has: page.getByRole('link', { name: /Select.*29 Feb/ }) });
+  const leapDay = page.locator('.slc-day:not(.outside)').filter({ has: page.locator('.slc-day-top>a:first-child').filter({ hasText: /^29$/ }) });
   await expect(leapDay.locator('.slc-shift')).toHaveCount(3);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
   await leapDay.locator('.slc-shift').first().click();
@@ -102,7 +102,7 @@ test('monthly grid shows real shifts, date inspector and branch filtering', asyn
   await expect(page).toHaveURL(new RegExp('/schedule/' + ids[0] + '\\?view=month'));
   await expect(page.getByRole('heading', { name: 'Edit unpublished shift' })).toBeVisible();
   await page.getByRole('link', { name: 'Back to rota' }).click();
-  await leapDay.getByRole('link', { name: /Select.*29 Feb/ }).click();
+  await leapDay.locator('.slc-day-top>a:first-child').click();
   await expect(page.getByRole('complementary', { name: 'Selected date and shift details' })).toContainText('Unassigned');
   await page.getByRole('link', { name: 'Day', exact: true }).click();
   await expect(page).toHaveURL(/view=day&date=2032-02-29&location=north$/);
