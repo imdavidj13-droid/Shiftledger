@@ -55,7 +55,7 @@ test('adding a shift keeps the real calendar visible in a reload-safe dismissibl
   await page.getByRole('link',{name:'Add assigned shift'}).click();
   await expect(page.getByRole('dialog',{name:'Add shift'})).toBeVisible();
   await expect(page.locator('.slc-grid-month')).toBeVisible();
-  await expect(page).toHaveURL(/\/schedule\/new\?view=day&date=2041-08-/);
+  await expect(page).toHaveURL(/\/schedule\/new\?view=month&month=2041-08&location=north&selected=2041-08-/);
   await page.reload();
   await expect(page.getByRole('dialog',{name:'Add shift'})).toBeVisible();
   await page.keyboard.press('Escape');
@@ -72,7 +72,7 @@ test('mobile week and shift URLs support direct entry, publishing and refresh', 
   await expect(page.getByRole('heading', { name: /Week of/ })).toBeVisible();
   await page.getByRole('button', { name: /Add shift/ }).click();
   await page.getByRole('link', { name: 'Add assigned shift' }).click();
-  await expect(page).toHaveURL(/\/schedule\/new\?view=day&date=2031-11-03&location=north$/);
+  await expect(page).toHaveURL(/\/schedule\/new\?week=2031-11-03&location=north&selected=2031-11-03$/);
   await expect(page.getByRole('dialog', { name: 'Add shift' })).toBeVisible();
   await expect(page.locator('.slc-grid-month')).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Location', exact: true })).toHaveValue('north');
@@ -256,6 +256,7 @@ test('weekly repeats, copy-week and bulk publication are usable from Schedule', 
   await page.getByRole('link', { name: 'Edit / details' }).click();
   await expect(page.getByRole('heading', { name: 'Edit unpublished shift' })).toBeVisible();
   await page.getByRole('link', { name: 'Back to rota' }).click();
+  await page.locator('.slc-day:not(.outside)').filter({has:page.locator('.slc-day-top>a:first-child').filter({hasText:/^19$/})}).locator('.slc-day-top>a:first-child').click();
   await page.getByRole('link', { name: 'Week', exact: true }).click();
   await page.getByRole('link', { name: 'Copy week' }).click();
   await expect(page).toHaveURL(/schedule\/bulk\?week=.*&location=north$/);
