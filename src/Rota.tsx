@@ -70,7 +70,7 @@ export function Rota(props: Props) {
   const isBulk = resourceId === 'bulk';
   const shiftId = isBulk ? undefined : resourceId;
   const viewParam = isBulk ? 'week' : params.get('view');
-  const view: CalendarView = viewParam === 'month' || viewParam === 'day' ? viewParam : 'week';
+  const view: CalendarView = viewParam === 'week' || viewParam === 'day' ? viewParam : 'month';
   const week = rotaWeek(params.get('week') || params.get('date'), zone, org.week_start);
   const month = rotaMonth(params.get('month'), zone, org.week_start);
   const day = rotaDay(params.get('date'), zone);
@@ -92,6 +92,7 @@ export function Rota(props: Props) {
   const [result, setResult] = useState<ShiftPage | null>(null);
   const [record, setRecord] = useState<Shift | null>(null);
   const [preset, setPreset] = useState<ShiftTemplate | null>(null);
+  const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const [loadedPath, setLoadedPath] = useState('');
   const [error, setError] = useState('');
   const cursor = view === 'week' && !isBulk ? params.get('cursor') : null;
@@ -124,12 +125,13 @@ export function Rota(props: Props) {
     return () => controller.abort();
   }, [base, endpoint, shiftId, copyEndpoint, queryString, paginate, loadKey, editorSource, presetEndpoint]);
 
-  if (resourceId === 'new') return <><a className="btn outline" href={href()}>Back to rota</a>
+  if (resourceId === 'new') return <><a className="btn outline" href={href()}>Back to calendar</a>
     {!manage ? <p className="alert error" role="alert">Only schedulers can create shifts.</p> :
       editorSource && loadedPath !== editorSource ? <p role="status">Loading shift template…</p> :
       error ? <p className="alert error" role="alert">{error}</p> :
       <ShiftEditor key={editorSource || 'new'} {...props} endpoint={base}
         initialDate={presetEndpoint ? focusDate : view === 'day' ? day.date : undefined}
+        initialOpen={params.get('open') === '1'}
         template={copyEndpoint ? record || undefined : undefined} preset={presetEndpoint ? preset || undefined : undefined}
         onSaved={id => go(href(id), true)}/>}</>;
   if (loadedPath !== loadKey) return <p role="status">Loading rota…</p>;
@@ -155,7 +157,7 @@ export function Rota(props: Props) {
   const today = month.today;
   return <section className="rota">
     <div className="rota-toolbar">
-      <div><h2>{manage ? { week: 'Weekly rota', month: 'Monthly rota', day: 'Daily rota' }[view] : 'My published shifts'}</h2>
+      <div><h2>{manage ? { week: 'Week view', month: 'Calendar', day: 'Day view' }[view] : 'My schedule'}</h2>
         <p>{view === 'month' ? month.label : view === 'day' ? day.label : 'Week starting ' + days[0].label} · Calendar dates in {zone}</p></div>
       <div className="rota-controls">
         <nav className="rota-controls rota-views" aria-label="Calendar view">
@@ -169,7 +171,8 @@ export function Rota(props: Props) {
           href={href(undefined, view, date, undefined, !coverage)}>{coverage ? 'Show all shifts' : 'Needs cover'}</a>}
         {manage && view === 'week' && <a className="btn outline" href={href('bulk')}>Copy or publish shifts</a>}
         {manage && <a className="btn outline" href={href('templates')}>Shift templates</a>}
-        {manage && <a className="btn primary" href={href('new')}>Create draft shift</a>}
+        {manage && <div className="rota-quick-wrapper"><button type="button" className="btn primary" aria-expanded={quickMenuOpen} aria-controls="rota-quick-actions" onClick={() => setQuickMenuOpen(open => !open)}>+ Add <span aria-hidden="true">⌄</span></button>
+          {quickMenuOpen && <div className="rota-quick-menu" id="rota-quick-actions"><a href={href('new','day',today)}>+ Add shift</a><a href={href('new','day',today) + '&open=1'}>+ Open shift</a><a href={appPath(org.id,'Team')}>+ Add team member</a><a href={appPath(org.id,'Setup') + '?step=3'}>+ Add job position</a></div>}</div>}
       </div>
     </div>
     {coverage && <p className="alert" role="status">Showing open vacancies and shifts that overlap approved leave.</p>}
@@ -198,6 +201,7 @@ export function Rota(props: Props) {
           </li>)}</ul>}
           {vacancies > 0 && <a className="rota-more" href={daily} aria-label={day.label + ', ' + vacancies + ' open shifts'}>{vacancies} open</a>}
           {records.length > shown.length && <a className="rota-more" href={daily} aria-label={day.label + ', ' + records.length + ' shifts'}>+{records.length - shown.length} more</a>}
+          {manage && <a className="rota-day-add" href={href('new','day',day.date)} aria-label={'Add shift on ' + day.label}>+ Add shift</a>}
         </section>;
       })}
       {view === 'month' && Array.from({ length: month.trailing }, (_, index) => <div className="rota-blank" key={'after-' + index} aria-hidden="true"/>)}
@@ -284,14 +288,14 @@ function ShiftClaims({ endpoint, onChanged }: { endpoint: string; onChanged: () 
   </section>;
 }
 
-function ShiftEditor({ locations, employees, assignments, locationFilter, openShifts, endpoint, shift, template, preset, initialDate, onSaved }: Props & {
-  endpoint: string; shift?: Shift; template?: Shift; preset?: ShiftTemplate; initialDate?: string; onSaved: (id: string) => void | Promise<void>;
+function ShiftEditor({ locations, employees, assignments, locationFilter, openShifts, endpoint, shift, template, preset, initialDate, initialOpen, onSaved }: Props & {
+  endpoint: string; shift?: Shift; template?: Shift; preset?: ShiftTemplate; initialDate?: string; initialOpen?: boolean; onSaved: (id: string) => void | Promise<void>;
 }) {
   const initial = shift || template;
   const published = shift?.status === 'published';
   const [locationId, setLocationId] = useState(initial?.location_id || preset?.location_id || locationFilter);
   const [employeeId, setEmployeeId] = useState(initial?.employee_id || '');
-  const [isOpen, setIsOpen] = useState(Boolean(initial?.is_open));
+  const [isOpen, setIsOpen] = useState(Boolean(initial?.is_open) || Boolean(initialOpen && openShifts));
   const [start, setStart] = useState(initial ? branchWallTime(initial.starts_at_utc, initial.time_zone) : initialDate ? initialDate + 'T' + (preset?.start_time ?? '09:00') : '');
   const [end, setEnd] = useState(initial ? branchWallTime(initial.ends_at_utc, initial.time_zone) : initialDate ? moveWallTime(initialDate + 'T' + (preset?.end_time ?? '17:00'), preset?.end_day_offset ?? 0) : '');
   const [startOccurrence, setStartOccurrence] = useState(initial ? shiftOccurrence(initial.starts_at_utc, initial.time_zone) : 'earlier');
@@ -301,6 +305,7 @@ function ShiftEditor({ locations, employees, assignments, locationFilter, openSh
   const [breakMinutes, setBreakMinutes] = useState(initial?.unpaid_break_minutes ?? preset?.unpaid_break_minutes ?? 0);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [saveAsUnpublished, setSaveAsUnpublished] = useState(false);
   const zone = locations.find(location => location.id === locationId)?.time_zone || '';
   const eligible = employees.filter(employee => employee.employment_status === 'active' &&
     assignments.some(assignment => assignment.employee_id === employee.id && assignment.location_id === locationId));
@@ -321,13 +326,16 @@ function ShiftEditor({ locations, employees, assignments, locationFilter, openSh
         await onSaved(result.shifts[0].id);
       } else {
         const result = await write<{ shift: Shift }>(endpoint, { ...draftAt(0), revision: shift?.revision }, shift ? 'PATCH' : 'POST');
+        if (!shift && !saveAsUnpublished && (employeeId || (isOpen && openShifts))) {
+          await write(endpoint + '/' + result.shift.id + '/publish', { revision: result.shift.revision });
+        }
         await onSaved(result.shift.id);
       }
     } catch (reason) { setError((reason as Error).message); }
     finally { setBusy(false); }
   }
   return <section className="panel rota-detail">
-    <div className="panel-title"><h2>{published ? 'Edit published shift' : shift ? 'Edit draft shift' : template ? 'Duplicate shift as draft' : 'Create draft shift'}</h2></div>
+    <div className="panel-title"><h2>{published ? 'Edit shift' : shift ? 'Edit unpublished shift' : template ? 'Duplicate shift' : 'Add shift'}</h2></div>
     <form className="form-stack pad" onSubmit={save}>
       {error && <p className="alert error" role="alert">{error}</p>}
       {preset && <p className="form-hint">Using {preset.name}. Review the date and choose a staff assignment before publishing.</p>}
@@ -359,8 +367,9 @@ function ShiftEditor({ locations, employees, assignments, locationFilter, openSh
         <input type="number" min={1} max={12} required value={occurrences} onChange={event => setOccurrences(Number(event.target.value))}/>
         <small className="form-hint">Includes this shift. Repeats use the same local times each week.</small>
       </label>}
-      <button className="btn primary" disabled={busy || !zone}>{published ? 'Save published changes' : shift ? 'Save draft' : occurrences > 1
-        ? 'Create ' + occurrences + ' drafts' : template ? 'Create duplicate draft' : 'Create draft'}</button>
+      {!shift && occurrences === 1 && <label className="rota-checkbox"><input type="checkbox" checked={saveAsUnpublished} onChange={event => setSaveAsUnpublished(event.target.checked)}/> Save without publishing</label>}
+      <button className="btn primary" disabled={busy || !zone}>{published ? 'Save changes' : shift ? 'Save changes' : occurrences > 1
+        ? 'Create ' + occurrences + ' unpublished shifts' : !saveAsUnpublished && (employeeId || (isOpen && openShifts)) ? 'Add and publish shift' : 'Save shift without publishing'}</button>
     </form>
   </section>;
 }
