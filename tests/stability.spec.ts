@@ -111,6 +111,26 @@ test('signed-out return URL, refresh, branch filter, history and workspace denia
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
 });
 
+test('internal workspace links do not reload the app or show the startup logo', async ({ page, baseURL }) => {
+  const { fixtureSessions, ownerEmail } = await import('./fixtures.mjs');
+  await page.context().addCookies([{ name: 'sl_session', value: fixtureSessions[ownerEmail], url: baseURL! }]);
+  await page.goto('/app/shop/overview');
+  await expect(page.getByRole('heading', { name: 'Your workforce, organised.' })).toBeVisible();
+  await page.evaluate(() => { (window as Window & { __navigationMarker?: string }).__navigationMarker = 'still-mounted'; });
+  await page.getByRole('link', { name: 'Open five-step setup' }).click();
+  await expect(page).toHaveURL(/\/app\/shop\/setup/);
+  await expect.poll(() => page.evaluate(() => (window as Window & { __navigationMarker?: string }).__navigationMarker)).toBe('still-mounted');
+  await page.goBack();
+  await expect(page.getByRole('heading', { name: 'Your workforce, organised.' })).toBeVisible();
+  await expect(page.evaluate(() => (window as Window & { __navigationMarker?: string }).__navigationMarker)).toBe('still-mounted');
+  await page.getByRole('link', { name: 'Leave', exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/shop\/leave/);
+  await expect(page.evaluate(() => (window as Window & { __navigationMarker?: string }).__navigationMarker)).toBe('still-mounted');
+  await page.getByRole('link', { name: 'Timesheets', exact: true }).click();
+  await expect(page).toHaveURL(/\/app\/shop\/timesheets/);
+  await expect(page.evaluate(() => (window as Window & { __navigationMarker?: string }).__navigationMarker)).toBe('still-mounted');
+});
+
 test('workspace API failure preserves the authenticated session and offers retry', async ({ page }) => {
   await page.route('**/api/v1/organisations', route => route.fulfill({ status: 503, json: { error: 'Database unavailable' } }));
   await page.goto('/sign-in');
