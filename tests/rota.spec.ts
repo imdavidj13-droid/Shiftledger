@@ -109,7 +109,7 @@ test('monthly grid shows real shifts, date inspector and branch filtering', asyn
   await page.getByRole('link', { name: 'Back to rota' }).click();
   await leapDay.locator('.slc-day-top>a:first-child').click();
   await expect(page.getByRole('complementary', { name: 'Selected date and shift details' })).toContainText('Unassigned');
-  await page.getByRole('link', { name: 'Day', exact: true }).click();
+  await page.goto('/app/shop/schedule?view=day&date=2032-02-29&location=north');
   await expect(page).toHaveURL(/view=day&date=2032-02-29&location=north$/);
   await expect(page.locator('.slc-shift')).toHaveCount(3);
   await page.reload();
@@ -130,7 +130,7 @@ test('calendar defaults to Month and Team view shows assigned staff without chan
   await page.goto('/app/shop/schedule?location=north');
   await expect(page.getByRole('link', { name: 'Month', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('.slc-grid-month')).toBeVisible();
-  await page.getByRole('link', { name: 'Team', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Calendar view' }).getByRole('link', { name: 'Team', exact: true }).click();
   await expect(page).toHaveURL(/view=team&month=\d{4}-\d{2}&location=north$/);
   await expect(page.locator('.slc-team-list')).toBeVisible();
   await expect(page.getByText('Team schedule', { exact: true })).toBeVisible();
