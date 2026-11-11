@@ -144,3 +144,39 @@ a:focus-visible{outline:3px solid #10261f;outline-offset:3px}
 .field textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--dark);font:inherit;resize:vertical}
 .staff-profile-link{font-weight:800;color:var(--green);text-decoration:underline;text-underline-offset:3px}
 .rota-warning{width:fit-content;max-width:100%;background:#ffe1a8;color:var(--dark);padding:2px 4px;border-radius:3px;font-weight:800}
+
+
+/* Calendar-first schedule workspace: opaque, edge-to-edge, dense and accessible. */
+.page.schedule-page{max-width:none;margin:0;padding:0;background:#fff;min-height:calc(100vh - 76px)}
+.schedule-page>.overline,.schedule-page>.page-heading{display:none}
+.schedule-page>.alert,.schedule-page>.loading,.schedule-page>[role="status"]{margin:16px 24px}
+.schedule-page .rota{display:flex;flex-direction:column;min-height:calc(100vh - 76px)}
+.schedule-page .rota-toolbar{margin:0;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:17px 26px;background:#fff;color:#10261f;border:0;border-bottom:2px solid #bcd1c3;border-radius:0}
+.schedule-page .rota-toolbar h2{font-size:25px;margin:0 0 3px;line-height:1.15}
+.schedule-page .rota-toolbar p{color:#3d604a;font-size:12px}
+.schedule-page .rota-toolbar .btn.primary{background:#c9f05e;color:#075641;border-color:#075641}
+.schedule-page .rota-toolbar .btn.outline{color:#075641;background:#fff;border-color:#bcd1c3}
+.schedule-page .rota-toolbar .btn{font-size:12px;padding:9px 11px;min-height:40px}
+.schedule-page .rota-toolbar .rota-views{padding-right:10px;border-color:#bcd1c3}
+.schedule-page .rota-days{margin-top:0;gap:0;flex:1}
+.schedule-page .rota-weekday{background:#e4f2d9;border-right:1px solid #bcd1c3;border-bottom:1px solid #bcd1c3;padding:12px 4px;font-size:12px}
+.schedule-page .rota-blank{background:#f4f8ec;border:1px solid #d5e3d2;border-radius:0}
+.schedule-page .rota-view-month .rota-day{min-height:clamp(120px,18vh,220px);border:1px solid #bcd1c3;border-radius:0;display:flex;flex-direction:column}
+.schedule-page .rota-view-week .rota-day{min-height:400px;border:1px solid #bcd1c3;border-radius:0;display:flex;flex-direction:column}
+.schedule-page .rota-view-day .rota-day{min-height:60vh;border:1px solid #bcd1c3;border-radius:0}
+.schedule-page .rota-day h3{background:#fff;text-align:left;font-weight:800;min-height:35px}
+.schedule-page .rota-day h3 a{padding:10px 12px}
+.schedule-page .rota-day>p{flex:1;text-align:left}
+.schedule-page .rota-day ul{padding:6px;gap:5px}
+.schedule-page .rota-shift{border-radius:4px;padding:7px}
+.schedule-page .rota-day-add{display:block;color:#075641;text-decoration:none;background:#e4f2d9;border:1px dashed #6da38b;border-radius:4px;padding:7px 8px;margin:auto 6px 7px;font-size:11px;font-weight:800;text-align:center}
+.schedule-page .rota-day-add:hover,.schedule-page .rota-day-add:focus-visible{background:#c9f05e;border-style:solid}
+.schedule-page .rota-quick-wrapper{position:relative}
+.schedule-page .rota-quick-menu{position:absolute;right:0;top:calc(100% + 6px);min-width:215px;background:#fff;color:#075641;border:2px solid #075641;z-index:15;display:flex;flex-direction:column;padding:6px}
+.schedule-page .rota-quick-menu a{padding:11px 12px;color:#075641;font-size:12px;text-decoration:none;font-weight:800}
+.schedule-page .rota-quick-menu a:hover,.schedule-page .rota-quick-menu a:focus-visible{background:#e4f2d9}
+.schedule-page>.rota-detail,.schedule-page>.btn,.schedule-page>.rota-detail~*{margin:22px}
+.schedule-page>.rota{margin:0}
+.schedule-page .rota>.pagination{padding:13px 23px}
+@media(max-width:1150px){.schedule-page .rota-toolbar{align-items:flex-start;flex-direction:column}.schedule-page .rota-controls{gap:5px}.schedule-page .rota-toolbar .btn{padding:7px 9px}}
+@media(max-width:750px){.schedule-page .rota-days.rota-view-month,.schedule-page .rota-days.rota-view-week{overflow-x:auto;grid-template-columns:repeat(7,minmax(105px,1fr));min-width:735px}.schedule-page .rota{overflow-x:auto}.schedule-page .rota-toolbar{padding:12px}.schedule-page .rota-view-month .rota-day{min-height:138px}.schedule-page .rota-day-add{padding:6px 2px;font-size:10px}}
