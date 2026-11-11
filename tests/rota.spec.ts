@@ -120,6 +120,22 @@ test('monthly grid shows real shifts, date inspector and branch filtering', asyn
   await expect(page.getByRole('heading', { name: 'March 2032' })).toBeVisible();
 });
 
+test('calendar defaults to Month and Team view shows assigned staff without changing organisation scope', async ({ page, baseURL }) => {
+  await page.context().addCookies([{ name: 'sl_session', value: fixtureSessions[ownerEmail], url: baseURL! }]);
+  await page.goto('/app/shop/schedule?location=north');
+  await expect(page.getByRole('link', { name: 'Month', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.slc-grid-month')).toBeVisible();
+  await page.getByRole('link', { name: 'Team', exact: true }).click();
+  await expect(page).toHaveURL(/view=team&month=\d{4}-\d{2}&location=north$/);
+  await expect(page.locator('.slc-team-list')).toBeVisible();
+  await expect(page.getByText('Team schedule', { exact: true })).toBeVisible();
+  await expect(page.locator('.slc-team-identity').getByText('Shared employee')).toBeVisible();
+  await page.reload();
+  await expect(page.locator('.slc-team-list')).toBeVisible();
+  await page.getByRole('link', { name: 'Month', exact: true }).click();
+  await expect(page.locator('.slc-grid-month')).toBeVisible();
+});
+
 test('open shifts require explicit marking and serialise competing claims and approvals', async ({ request }) => {
   const startsAt = '2037-05-08T09:00:00Z', endsAt = '2037-05-08T17:00:00Z';
   const data = { locationId: 'south', startsAt, endsAt };
