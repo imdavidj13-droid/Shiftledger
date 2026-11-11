@@ -49,18 +49,20 @@ test('range queries include shifts crossing midnight and enforce branch and tena
 
 test('mobile week and shift URLs support direct entry, publishing and refresh', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/app/shop/schedule?week=2031-11-03&location=north');
+  await page.goto('/app/shop/schedule?view=week&week=2031-11-03&location=north');
   await page.getByLabel('Email address').fill(ownerEmail);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Weekly rota' })).toBeVisible();
-  await page.getByRole('link', { name: 'Create draft shift' }).click();
-  await expect(page).toHaveURL(/\/schedule\/new\?week=2031-11-03&location=north$/);
+  await expect(page.getByRole('heading', { name: /Week of/ })).toBeVisible();
+  await page.getByRole('button', { name: /Add shift/ }).click();
+  await page.getByRole('link', { name: 'Add assigned shift' }).click();
+  await expect(page).toHaveURL(/\/schedule\/new\?view=day&date=2031-11-03&location=north$/);
   await expect(page.getByRole('combobox', { name: 'Location', exact: true })).toHaveValue('north');
   await page.getByRole('combobox', { name: 'Employee', exact: true }).selectOption('shared');
   await page.getByLabel('Start', { exact: true }).fill('2031-11-05T09:00');
   await page.getByLabel('End', { exact: true }).fill('2031-11-05T17:00');
-  await page.getByRole('button', { name: 'Create draft', exact: true }).click();
+  await page.getByLabel('Save without publishing').check();
+  await page.getByRole('button', { name: 'Save shift without publishing' }).click();
   await expect(page.getByRole('heading', { name: 'Shared employee' })).toBeVisible();
   await page.getByRole('button', { name: 'Publish shift' }).click();
   await expect(page.getByRole('button', { name: 'Cancel shift' })).toBeVisible();
@@ -68,11 +70,11 @@ test('mobile week and shift URLs support direct entry, publishing and refresh', 
   await expect(page.getByRole('button', { name: 'Cancel shift' })).toBeVisible();
   await page.getByRole('link', { name: 'Back to rota' }).click();
   await expect(page.getByRole('link', { name: /Shared employee/ })).toBeVisible();
-  await expect(page).toHaveURL(/\/schedule\?week=2031-11-03&location=north$/);
+  await expect(page).toHaveURL(/\/schedule\?view=day&date=2031-11-03&location=north$/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
 });
 
-test('monthly grid shows real shifts and overflow, with branch-filtered day and shift links', async ({ page, request, baseURL }) => {
+test('monthly grid shows real shifts, date inspector and branch filtering', async ({ page, request, baseURL }) => {
   const ids: string[] = [];
   for (let index = 0; index < 3; index++) {
     const response = await request.post(path, { ...owner, data: {
@@ -85,38 +87,37 @@ test('monthly grid shows real shifts and overflow, with branch-filtered day and 
     locationId: 'south', startsAt: '2032-02-29T12:00:00Z', endsAt: '2032-02-29T15:00:00Z'
   } });
   expect(south.status()).toBe(201);
-
   await page.context().addCookies([{ name: 'sl_session', value: fixtureSessions[ownerEmail], url: baseURL! }]);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/app/shop/schedule?week=2032-02-23&location=north');
-  await page.getByRole('link', { name: 'Month', exact: true }).click();
-  await expect(page).toHaveURL(/view=month&month=2032-02&location=north$/);
-  await expect(page.getByRole('heading', { name: 'Monthly rota' })).toBeVisible();
-  await expect(page.locator('.rota-view-month .rota-day')).toHaveCount(29);
-  const leapDay = page.locator('.rota-day').filter({ has: page.getByRole('link', { name: /View.*29/ }) });
-  await expect(leapDay.locator('.rota-shift')).toHaveCount(2);
-  await expect(leapDay.getByText('+1 more')).toBeVisible();
+  await page.goto('/app/shop/schedule?view=month&month=2032-02&location=north');
+  await expect(page.getByRole('heading', { name: 'February 2032' })).toBeVisible();
+  await expect(page.locator('.slc-grid-month .slc-day:not(.outside)')).toHaveCount(29);
+  const leapDay = page.locator('.slc-day').filter({ has: page.getByRole('link', { name: /Select.*29 Feb/ }) });
+  await expect(leapDay.locator('.slc-shift')).toHaveCount(3);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
-
-  await leapDay.locator('.rota-shift').first().click();
+  await leapDay.locator('.slc-shift').first().click();
+  await expect(page).toHaveURL(/inspect=/);
+  await expect(page.getByRole('complementary', { name: 'Selected date and shift details' })).toContainText('Unassigned');
+  await page.getByRole('link', { name: 'Edit / details' }).click();
   await expect(page).toHaveURL(new RegExp('/schedule/' + ids[0] + '\\?view=month'));
-  await expect(page.getByRole('heading', { name: 'Edit draft shift' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Edit unpublished shift' })).toBeVisible();
   await page.getByRole('link', { name: 'Back to rota' }).click();
-  await leapDay.getByRole('link', { name: /3 shifts/ }).click();
+  await leapDay.getByRole('link', { name: /Select.*29 Feb/ }).click();
+  await expect(page.getByRole('complementary', { name: 'Selected date and shift details' })).toContainText('Unassigned');
+  await page.getByRole('link', { name: 'Day', exact: true }).click();
   await expect(page).toHaveURL(/view=day&date=2032-02-29&location=north$/);
-  await expect(page.getByRole('heading', { name: 'Daily rota' })).toBeVisible();
-  await expect(page.locator('.rota-shift')).toHaveCount(3);
+  await expect(page.locator('.slc-shift')).toHaveCount(3);
   await page.reload();
-  await expect(page.locator('.rota-shift')).toHaveCount(3);
-  await page.getByRole('link', { name: 'Next day' }).click();
-  await expect(page.locator('.rota-shift')).toHaveCount(3);
-  await expect(page.getByText('Continues from previous day')).toHaveCount(3);
+  await expect(page.locator('.slc-shift')).toHaveCount(3);
+  await page.getByRole('button', { name: 'Next day' }).click();
+  await expect(page).toHaveURL(/view=day&date=2032-03-01&location=north$/);
+  await expect(page.locator('.slc-shift')).toHaveCount(3);
   await page.goBack();
   await expect(page).toHaveURL(/date=2032-02-29&location=north$/);
   await page.getByRole('link', { name: 'Month', exact: true }).click();
   await page.getByRole('link', { name: 'Next month' }).click();
   await expect(page).toHaveURL(/month=2032-03&location=north$/);
-  await expect(page.getByText(/March 2032/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'March 2032' })).toBeVisible();
 });
 
 test('open shifts require explicit marking and serialise competing claims and approvals', async ({ request }) => {
@@ -162,19 +163,20 @@ test('open shifts require explicit marking and serialise competing claims and ap
 test('manager creates an open shift and reviews a real claim from the calendar', async ({ page, request, baseURL }) => {
   await page.context().addCookies([{ name: 'sl_session', value: fixtureSessions[managerEmail], url: baseURL! }]);
   await page.goto('/app/shop/schedule?view=day&date=2037-06-10&location=north');
-  await page.getByRole('link', { name: 'Create draft shift' }).click();
-  await page.getByLabel('Mark as an open shift').check();
+  await page.getByRole('button', { name: /Add shift/ }).click();
+  await page.getByRole('link', { name: 'Add open shift' }).click();
+  await expect(page.getByLabel('Mark as an open shift')).toBeChecked();
   await expect(page.getByRole('combobox', { name: 'Employee', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: 'Create draft', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Open shift draft', exact: true })).toBeVisible();
-  const id = new URL(page.url()).pathname.split('/').at(-1);
-  await page.getByRole('button', { name: 'Publish shift' }).click();
+  await page.getByLabel('Start', { exact: true }).fill('2037-06-10T09:00');
+  await page.getByLabel('End', { exact: true }).fill('2037-06-10T17:00');
+  await page.getByRole('button', { name: 'Add and publish shift' }).click();
   await expect(page.getByRole('heading', { name: 'Open shift', exact: true })).toBeVisible();
+  const id = new URL(page.url()).pathname.split('/').at(-1);
   expect((await request.post(path + '/' + id + '/claims', employee)).status()).toBe(201);
   await page.getByRole('link', { name: 'Back to rota' }).click();
   await page.getByRole('link', { name: 'Month', exact: true }).click();
-  await expect(page.getByRole('link', { name: /1 open shifts/ })).toBeVisible();
-  await page.getByRole('link', { name: /Open shift.*published/ }).click();
+  await page.getByRole('link', { name: /Open shift/ }).first().click();
+  await page.getByRole('link', { name: 'Edit / details' }).click();
   await page.getByRole('button', { name: 'Approve claim' }).click();
   await expect(page.getByText('approved', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Shared employee' })).toBeVisible();
@@ -207,14 +209,17 @@ test('bulk draft creation and publication are all-or-nothing and safe to retry',
 test('weekly repeats, copy-week and bulk publication are usable from Schedule', async ({ page, baseURL }) => {
   await page.context().addCookies([{ name: 'sl_session', value: fixtureSessions[managerEmail], url: baseURL! }]);
   await page.goto('/app/shop/schedule?view=day&date=2040-03-19&location=north');
-  await page.getByRole('link', { name: 'Create draft shift' }).click();
+  await page.getByRole('button', { name: /Add shift/ }).click();
+  await page.getByRole('link', { name: 'Add assigned shift' }).click();
   await page.getByRole('combobox', { name: 'Employee', exact: true }).selectOption('shared');
+  await page.getByLabel('Start', { exact: true }).fill('2040-03-19T09:00');
+  await page.getByLabel('End', { exact: true }).fill('2040-03-19T17:00');
   await page.getByLabel('Weekly occurrences').fill('2');
-  await page.getByRole('button', { name: 'Create 2 drafts' }).click();
-  await expect(page.getByRole('heading', { name: 'Edit draft shift' })).toBeVisible();
+  await page.getByRole('button', { name: 'Create 2 unpublished shifts' }).click();
+  await expect(page.getByRole('heading', { name: 'Edit unpublished shift' })).toBeVisible();
   await page.getByRole('link', { name: 'Back to rota' }).click();
   await page.getByRole('link', { name: 'Week', exact: true }).click();
-  await page.getByRole('link', { name: 'Copy or publish shifts' }).click();
+  await page.getByRole('link', { name: 'Copy week' }).click();
   await expect(page).toHaveURL(/schedule\/bulk\?week=.*&location=north$/);
   await page.reload();
   await page.getByRole('button', { name: 'Select all' }).click();
@@ -223,7 +228,7 @@ test('weekly repeats, copy-week and bulk publication are usable from Schedule', 
   await page.getByRole('button', { name: 'Copy selected shifts' }).click();
   await expect(page.getByRole('status')).toContainText('Copied 1 shift as a draft.');
   await page.getByRole('link', { name: 'View rota' }).click();
-  await page.getByRole('link', { name: 'Copy or publish shifts' }).click();
+  await page.getByRole('link', { name: 'Copy week' }).click();
   await page.getByRole('button', { name: 'Select all' }).click();
   await page.getByRole('button', { name: 'Publish selected drafts' }).click();
   await expect(page.getByRole('status')).toContainText('Published 1 shift.');
@@ -262,16 +267,17 @@ test('coverage filter flags approved leave and upcoming published shifts can be 
   await page.goto('/app/shop/schedule?view=day&date=' + date + '&location=south');
   await page.getByRole('link',{name:'Needs cover',exact:true}).click();
   await expect(page).toHaveURL(/coverage=1$/);
-  await page.getByRole('link',{name:/Shared employee.*Approved leave/}).click();
+  await page.getByRole('link',{name:/Shared employee.*published/}).click();
+  await page.getByRole('link',{name:'Edit / details'}).click();
   await expect(page.getByText('The assigned employee has approved leave during this shift.')).toBeVisible();
-  await expect(page.getByRole('heading',{name:'Edit published shift'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Edit shift'})).toBeVisible();
   await page.getByRole('combobox',{name:'Employee',exact:true}).selectOption('cover-staff');
-  await page.getByRole('button',{name:'Save published changes'}).click();
+  await page.getByRole('button',{name:'Save changes'}).click();
   await expect(page.getByRole('heading',{name:'Cover Employee',exact:true})).toBeVisible();
   await expect(page.getByText('The assigned employee has approved leave during this shift.')).toHaveCount(0);
   expect((await request.get(detail,employee)).status()).toBe(404);
   expect((await (await request.get(detail,session(coverEmail))).json()).shift).toMatchObject({status:'published',revision:3});
   await page.getByRole('link',{name:'Back to rota'}).click();
-  await expect(page.locator('.rota-shift')).toHaveCount(1);
+  await expect(page.locator('.slc-shift')).toHaveCount(1);
   await expect(page.getByRole('link',{name:/Open shift.*published/})).toBeVisible();
 });
