@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { api, write } from './api';
 import { RotaBatch } from './RotaBatch';
 import { ScheduleCalendar } from './ScheduleCalendar';
@@ -92,6 +92,8 @@ export function Rota(props: Props) {
     return root + (id ? '/' + id : '') + '?' + query;
   };
   const [result, setResult] = useState<ShiftPage | null>(null);
+  const [backgroundResult, setBackgroundResult] = useState<ShiftPage | null>(null);
+  const [backgroundError, setBackgroundError] = useState('');
   const [record, setRecord] = useState<Shift | null>(null);
   const [preset, setPreset] = useState<ShiftTemplate | null>(null);
   const [loadedPath, setLoadedPath] = useState('');
@@ -126,15 +128,50 @@ export function Rota(props: Props) {
     return () => controller.abort();
   }, [base, endpoint, shiftId, copyEndpoint, queryString, paginate, loadKey, editorSource, presetEndpoint]);
 
-  if (resourceId === 'new') return <><a className="btn outline" href={href()}>Back to calendar</a>
-    {!manage ? <p className="alert error" role="alert">Only schedulers can create shifts.</p> :
-      editorSource && loadedPath !== editorSource ? <p role="status">Loading shift template…</p> :
-      error ? <p className="alert error" role="alert">{error}</p> :
-      <ShiftEditor key={editorSource || 'new'} {...props} endpoint={base}
-        initialDate={presetEndpoint ? focusDate : view === 'day' ? day.date : undefined}
-        initialOpen={params.get('open') === '1'}
-        template={copyEndpoint ? record || undefined : undefined} preset={presetEndpoint ? preset || undefined : undefined}
-        onSaved={id => go(href(id), true)}/>}</>;
+  // Keep the actual month calendar behind the create-shift popup.
+  useEffect(() => {
+    if (resourceId !== 'new') return;
+    const controller = new AbortController();
+    const query = new URLSearchParams({
+      from: month.days[0].from,
+      to: month.days[month.days.length - 1].to
+    });
+    if (locationFilter) query.set('location', locationFilter);
+    if (coverage) query.set('coverage', '1');
+    setBackgroundResult(null);
+    setBackgroundError('');
+    void loadShifts(base,query,false,controller.signal).then(data => {
+      if (!controller.signal.aborted) setBackgroundResult(data);
+    }).catch(reason => {
+      if (!controller.signal.aborted) setBackgroundError((reason as Error).message);
+    });
+    return () => controller.abort();
+  }, [resourceId,base,month.month,locationFilter,coverage,zone]);
+
+  if (resourceId === 'new') {
+    const closeHref = href(undefined, 'month', month.month);
+    const backgroundHref = (id?:string, targetView:CalendarView='month', targetDate:string=month.month, nextCursor?:string, onlyCoverage:boolean=coverage) =>
+      href(id, targetView, targetDate, nextCursor, onlyCoverage);
+    return <>
+      {backgroundResult
+        ? <ScheduleCalendar org={org} locations={locations} locationFilter={locationFilter}
+            employees={props.employees} assignments={props.assignments} shifts={[...backgroundResult.shifts].reverse()}
+            view="month" days={month.days} month={month} week={week} period={month} date={month.month}
+            zone={zone} coverage={coverage} manage={manage} root={root} openShifts={openShifts}
+            href={backgroundHref} cursor={null} nextCursor={null}/>
+        : <div className="slc-background-loading" role="status">{backgroundError || 'Loading calendar…'}</div>}
+      <CreateShiftDialog onClose={() => go(closeHref)}>
+        {!manage ? <p className="alert error" role="alert">Only schedulers can create shifts.</p> :
+          editorSource && loadedPath !== editorSource ? <p role="status">Loading shift template…</p> :
+          error ? <p className="alert error" role="alert">{error}</p> :
+          <ShiftEditor key={editorSource || 'new'} {...props} endpoint={base}
+            initialDate={presetEndpoint ? focusDate : view === 'day' ? day.date : undefined}
+            initialOpen={params.get('open') === '1'}
+            template={copyEndpoint ? record || undefined : undefined} preset={presetEndpoint ? preset || undefined : undefined}
+            onSaved={id => go(href(id), true)}/>}
+      </CreateShiftDialog>
+    </>;
+  }
   if (loadedPath !== loadKey) return <p role="status">Loading rota…</p>;
   if (error) return <><p className="alert error" role="alert">{error}</p><a className="btn outline" href={href()}>Back to rota</a></>;
 
@@ -160,6 +197,40 @@ export function Rota(props: Props) {
     view={view} days={days} month={month} week={week} period={period} date={date}
     zone={zone} coverage={coverage} manage={manage} root={root} openShifts={openShifts}
     href={href} cursor={cursor} nextCursor={result?.nextCursor ?? null}/>;
+}
+
+
+function CreateShiftDialog({children,onClose}:{children:ReactNode;onClose:()=>void}) {
+  const dialogRef=useRef<HTMLDivElement>(null);
+  const onCloseRef=useRef(onClose);
+  onCloseRef.current=onClose;
+  useEffect(()=>{
+    const previouslyFocused=document.activeElement instanceof HTMLElement?document.activeElement:null;
+    dialogRef.current?.focus();
+    function onKey(event:KeyboardEvent) {
+      if(event.key==='Escape'){event.preventDefault();onCloseRef.current();return;}
+      if(event.key!=='Tab'||!dialogRef.current)return;
+      const focusable=Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled],[tabindex]:not([tabindex="-1"])'
+      )).filter(node=>node.getClientRects().length>0);
+      if(!focusable.length){event.preventDefault();return;}
+      const first=focusable[0],last=focusable[focusable.length-1];
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();last.focus();}
+      else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first.focus();}
+    }
+    document.addEventListener('keydown',onKey);
+    return ()=>{document.removeEventListener('keydown',onKey);previouslyFocused?.focus();};
+  },[]);
+  return <div className="slc-dialog-backdrop" onMouseDown={event=>{
+    if(event.target===event.currentTarget)onClose();
+  }}>
+    <div className="slc-dialog" role="dialog" aria-modal="true" aria-label="Add shift" ref={dialogRef} tabIndex={-1}>
+      <div className="slc-dialog-top"><div><span>SHIFTLEDGER / SCHEDULE</span><strong>Add a shift</strong></div>
+        <button type="button" className="slc-dialog-close" aria-label="Close add shift" onClick={onClose}>×</button>
+      </div>
+      <div className="slc-dialog-content">{children}</div>
+    </div>
+  </div>;
 }
 
 function ShiftDetails({ record, org, manage, endpoint, onChanged, onDiscard, copyHref, openShifts }: {
