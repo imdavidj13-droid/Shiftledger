@@ -211,7 +211,7 @@ function CreateShiftDialog({children,onClose}:{children:ReactNode;onClose:()=>vo
       if(event.key==='Escape'){event.preventDefault();onCloseRef.current();return;}
       if(event.key!=='Tab'||!dialogRef.current)return;
       const focusable=Array.from(dialogRef.current.querySelectorAll<HTMLElement>(
-        'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled],[tabindex]:not([tabindex="-1"])'
+        'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
       )).filter(node=>node.getClientRects().length>0);
       if(!focusable.length){event.preventDefault();return;}
       const first=focusable[0],last=focusable[focusable.length-1];
