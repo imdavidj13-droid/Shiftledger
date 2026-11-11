@@ -220,3 +220,9 @@ a:focus-visible{outline:3px solid #10261f;outline-offset:3px}
 @media(hover:none){.schedule-page .rota-view-month .rota-day-add{opacity:1}}
 @media(max-width:1150px){.schedule-page .rota-toolbar{flex-direction:row;align-items:center;flex-wrap:wrap}.schedule-page .rota-primary-controls{margin-left:0}.schedule-page .rota-view-month{grid-auto-rows:minmax(105px,auto)}}
 @media(max-width:750px){.schedule-page .rota-toolbar{padding:15px 14px}.schedule-page .rota-view-month{width:100%;min-width:735px;grid-template-columns:repeat(7,minmax(105px,1fr))}.schedule-page .rota-view-month .rota-day{min-height:105px}.schedule-page .rota-view-month .rota-day-add{opacity:1}}
+
+
+/* Form checkbox controls must never inherit the full-width text input rule. */
+input[type="checkbox"],input[type="radio"]{width:18px;height:18px;min-height:18px;max-width:18px;padding:0;margin:0;flex:0 0 18px;accent-color:#075641;vertical-align:middle}
+.rota-checkbox{display:inline-flex;align-items:center;gap:10px;min-height:26px}
+.slc-dialog .rota-checkbox{justify-content:flex-start;width:auto;font-size:13px;line-height:1.4}
