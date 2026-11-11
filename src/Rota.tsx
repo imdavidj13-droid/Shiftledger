@@ -70,7 +70,7 @@ export function Rota(props: Props) {
   const params = route.searchParams;
   const isBulk = resourceId === 'bulk';
   const shiftId = isBulk ? undefined : resourceId;
-  const viewParam = isBulk ? 'week' : params.get('view');
+  const viewParam = isBulk ? 'week' : params.get('view') || (params.has('week') ? 'week' : null);
   const view: CalendarView = viewParam === 'week' || viewParam === 'day' ? viewParam : 'month';
   const week = rotaWeek(params.get('week') || params.get('date'), zone, org.week_start);
   const month = rotaMonth(params.get('month') || params.get('date')?.slice(0,7) || params.get('week')?.slice(0,7) || null, zone, org.week_start);
