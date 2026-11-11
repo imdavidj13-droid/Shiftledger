@@ -53,6 +53,7 @@ export function ScheduleCalendar({ org, locations, locationFilter, employees, as
     else url.searchParams.delete('inspect');
     return url.pathname + url.search;
   };
+  const adjacentDayHref = (target:string) => days.some(d=>d.date===target) ? selectionHref(target) : href(undefined,'day',target);
   const selectedDayHref = (shift:Shift) => {
     const calendarDay = days.find(d=>shift.starts_at_utc < d.to && shift.ends_at_utc > d.from);
     return selectionHref(calendarDay?.date || selectedDate,shift.id);
@@ -141,9 +142,9 @@ export function ScheduleCalendar({ org, locations, locationFilter, employees, as
       </div>
       <aside className="slc-inspector" aria-label="Selected date and shift details">
         <div className="slc-inspector-header">
-          <button className="slc-inspector-arrow" type="button" onClick={()=>go(selectionHref(rotaDay(selectedDate,zone).previous))} aria-label="Previous day"><ChevronLeft size={19}/></button>
+          <button className="slc-inspector-arrow" type="button" onClick={()=>go(adjacentDayHref(rotaDay(selectedDate,zone).previous))} aria-label="Previous day"><ChevronLeft size={19}/></button>
           <h2>{new Intl.DateTimeFormat(undefined,{weekday:'short',month:'short',day:'numeric',timeZone:'UTC'}).format(new Date(selectedDate+'T12:00:00Z'))}</h2>
-          <button className="slc-inspector-arrow" type="button" onClick={()=>go(selectionHref(rotaDay(selectedDate,zone).next))} aria-label="Next day"><ChevronRight size={19}/></button>
+          <button className="slc-inspector-arrow" type="button" onClick={()=>go(adjacentDayHref(rotaDay(selectedDate,zone).next))} aria-label="Next day"><ChevronRight size={19}/></button>
           <a href={href()} className="slc-inspector-close" aria-label="Reset selected day"><X size={19}/></a>
         </div>
         {selectedShift ? <div className="slc-inspector-card">
