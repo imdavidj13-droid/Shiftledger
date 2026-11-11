@@ -47,6 +47,22 @@ test('range queries include shifts crossing midnight and enforce branch and tena
   expect((await request.get(detail, owner)).status()).toBe(404);
 });
 
+test('adding a shift keeps the real calendar visible in a reload-safe dismissible popup', async ({ page, baseURL }) => {
+  await page.context().addCookies([{ name:'sl_session', value: fixtureSessions[ownerEmail], url: baseURL! }]);
+  await page.goto('/app/shop/schedule?view=month&month=2041-08&location=north');
+  await expect(page.locator('.slc-grid-month')).toBeVisible();
+  await page.getByRole('button',{name:/Add shift/}).click();
+  await page.getByRole('link',{name:'Add assigned shift'}).click();
+  await expect(page.getByRole('dialog',{name:'Add shift'})).toBeVisible();
+  await expect(page.locator('.slc-grid-month')).toBeVisible();
+  await expect(page).toHaveURL(/\/schedule\/new\?view=day&date=2041-08-/);
+  await page.reload();
+  await expect(page.getByRole('dialog',{name:'Add shift'})).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog',{name:'Add shift'})).toHaveCount(0);
+  await expect(page).toHaveURL(/\/schedule\?view=month&month=2041-08&location=north$/);
+});
+
 test('mobile week and shift URLs support direct entry, publishing and refresh', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/app/shop/schedule?view=week&week=2031-11-03&location=north');
