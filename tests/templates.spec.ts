@@ -44,7 +44,8 @@ test('manager creates and reuses a persisted overnight template from the rota', 
   await expect(page.getByLabel('End',{exact:true})).toHaveValue(/2045-01-10T06:00/);
   await expect(page.getByLabel('Unpaid break (minutes)',{exact:true})).toHaveValue('45');
   await page.getByRole('combobox',{name:'Employee',exact:true}).selectOption('shared');
-  await page.getByRole('button',{name:'Create draft',exact:true}).click();
+  await page.getByLabel('Save without publishing').check();
+  await page.getByRole('button',{name:'Save shift without publishing'}).click();
   await expect(page.getByRole('heading',{name:'Shared employee',exact:true})).toBeVisible();
   await expect(page.getByRole('button',{name:'Publish shift'})).toBeVisible();
 });
