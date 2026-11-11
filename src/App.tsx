@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { LayoutDashboard, CalendarDays, UsersRound, Clock3, CalendarCheck2, ArrowLeftRight, BarChart3, Settings2, UserRound, Plus, LogOut, Building2, MapPin, ShieldCheck, ArrowRight, CheckCircle2, AlertCircle, RefreshCcw } from 'lucide-react';
-import { appPath, go, parseWorkspace, signInDestination, useRoute, type Page } from './routes';
+import { appPath, go, installClientNavigation, parseWorkspace, signInDestination, useRoute, type Page } from './routes';
 import { api, ApiError, post, write } from './api';
 import { Locations, OrganisationSettings, type Location, type Org } from './Locations';
 import { formatShiftTime } from './time';
@@ -298,6 +298,7 @@ function Dashboard({user,org,organisations,page,resourceId,locationFilter,onLogo
  <footer>© ShiftLedger · Real organisation data · No simulated statistics</footer></main></div></div>;
 }
 function App(){
+ useEffect(installClientNavigation,[]);
  const route=useRoute();
  const verificationToken=route.searchParams.get('verify');
  const workspace=parseWorkspace(route.pathname);
